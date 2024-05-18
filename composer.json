@@ -1,0 +1,33 @@
+{
+  "name": "sendamaphp/console",
+  "type": "library",
+  "version": "1.0.0",
+  "description": "A simple CLI for creating and managing sendama-engine projects.",
+  "require-dev": {
+    "pestphp/pest": "^2.34"
+  },
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "Sendama\\Console\\": "src/"
+    },
+    "files": [
+      "src/Util/Functions.php"
+    ]
+  },
+  "authors": [
+    {
+      "name": "Andrew Masiye",
+      "email": "amasiye313@gmail.com"
+    }
+  ],
+  "require": {
+    "php": ">=8.3",
+    "symfony/console": "^7.0"
+  },
+  "config": {
+    "allow-plugins": {
+      "pestphp/pest-plugin": true
+    }
+  }
+}
