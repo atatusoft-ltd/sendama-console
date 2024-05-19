@@ -8,15 +8,17 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
 #[AsCommand(
-    name: 'generate:prefab',
-    description: 'Generate a new prefab'
+  name: 'generate:prefab',
+  description: 'Generate a new prefab',
+  hidden: true
 )]
 class GenerateScene extends Command
 {
-    public function execute(InputInterface $input, OutputInterface $output): int
-    {
-        $output->writeln('Generating a new scene...');
+  public function execute(InputInterface $input, OutputInterface $output): int
+  {
+    // TODO: Implement execute() method.
+    $output->writeln('Not implemented yet.');
 
-        return Command::SUCCESS;
-    }
+    return Command::SUCCESS;
+  }
 }

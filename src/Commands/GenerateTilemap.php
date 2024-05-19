@@ -2,7 +2,23 @@
 
 namespace Sendama\Console\Commands;
 
-class GenerateTilemap
-{
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
 
+#[AsCommand(
+    name: 'generate:tilemap',
+    description: 'Generate a new tilemap',
+    hidden: true
+)]
+class GenerateTilemap extends Command
+{
+  public function execute(InputInterface $input, OutputInterface $output): int
+  {
+    // TODO: Implement execute() method.
+    $output->writeln('Not implemented yet.');
+
+    return Command::SUCCESS;
+  }
 }
