@@ -1,7 +1,6 @@
 {
   "name": "sendamaphp/console",
   "type": "library",
-  "version": "1.0.0",
   "description": "A simple CLI for creating and managing sendama-engine projects.",
   "require-dev": {
     "pestphp/pest": "^2.34"
