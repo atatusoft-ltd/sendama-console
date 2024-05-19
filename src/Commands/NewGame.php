@@ -82,8 +82,8 @@ class NewGame extends Command
     $this->createProjectConfiguration($projectName);
 
     // Tell user cd into the project directory
-    $this->log(sprintf("\e[2;37m;cd %s/\e[0m", basename($this->targetDirectory)), true);
-    $this->log(sprintf("\e[2;37m;php %s.php\e[0m", basename($this->targetDirectory)), true);
+    $this->log(sprintf("\n\n\033[2;37m;cd %s/\e[0m", basename($this->targetDirectory)), true);
+    $this->log(sprintf("\033[2;37m;php %s.php\e[0m", basename($this->targetDirectory)), true);
 
     // Done
     $this->log('Done!', true);
