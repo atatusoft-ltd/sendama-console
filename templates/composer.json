@@ -1,0 +1,14 @@
+{
+  "name": "sendama/game",
+  "description": "A simple ASCII terminal game.",
+  "license": "proprietary",
+  "require": {
+    "php": ">=8.3",
+    "atatusoft-ltd/sendama-engine": "^0.1.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Sendama\\Game\\": "assets/"
+    }
+  }
+}
