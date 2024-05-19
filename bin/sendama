@@ -4,7 +4,9 @@
 use Sendama\Console\Commands\GeneratePrefab;
 use Sendama\Console\Commands\GenerateScene;
 use Sendama\Console\Commands\GenerateScript;
-use Sendama\Console\Commands\GenerateSprite;
+use Sendama\Console\Commands\GenerateTexture;
+use Sendama\Console\Commands\GenerateTilemap;
+use Sendama\Console\Commands\GenerateTileset;
 use Sendama\Console\Commands\NewGame;
 use Symfony\Component\Console\Application;
 
@@ -12,18 +14,28 @@ require __DIR__ . '/../vendor/autoload.php';
 
 function bootstrap(): void
 {
-  $composer = json_decode(file_get_contents(__DIR__ . '/../composer.json'), true);
-  $app = new Application("Sendama CLI", $composer['version']);
+  try
+  {
+    $composer = json_decode(file_get_contents(__DIR__ . '/../composer.json'), true);
+    $app = new Application("Sendama CLI", $composer['version']);
 
-  $app->addCommands([
-    new NewGame(),
-    new GeneratePrefab(),
-    new GenerateScene(),
-    new GenerateScript(),
-    new GenerateSprite(),
-//    new GenerateTilemap(),
-//    new GenerateTileset(),
-  ]);
+    $app->addCommands([
+      new NewGame(),
+      new GeneratePrefab(),
+      new GenerateScene(),
+      new GenerateScript(),
+      new GenerateTexture(),
+      new GenerateTilemap(),
+      new GenerateTileset(),
+    ]);
+
+    $app->run();
+  }
+  catch (Exception $e)
+  {
+    echo $e->getMessage();
+    exit(1);
+  }
 }
 
 bootstrap();

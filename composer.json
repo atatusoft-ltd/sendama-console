@@ -29,5 +29,8 @@
     "allow-plugins": {
       "pestphp/pest-plugin": true
     }
-  }
+  },
+  "bin": [
+    "bin/sendama"
+  ]
 }
