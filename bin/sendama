@@ -10,14 +10,21 @@ use Sendama\Console\Commands\GenerateTileset;
 use Sendama\Console\Commands\NewGame;
 use Symfony\Component\Console\Application;
 
-require __DIR__ . '/../vendor/autoload.php';
+if (file_exists(__DIR__ . '/../vendor/autoload.php'))
+{
+  require __DIR__ . '/../vendor/autoload.php';
+}
+else
+{
+  require __DIR__ . '/../../../autoload.php';
+}
 
 function bootstrap(): void
 {
   try
   {
     $composer = json_decode(file_get_contents(__DIR__ . '/../composer.json'), true);
-    $app = new Application("Sendama CLI", $composer['version']);
+    $app = new Application("Sendama CLI");
 
     $app->addCommands([
       new NewGame(),
