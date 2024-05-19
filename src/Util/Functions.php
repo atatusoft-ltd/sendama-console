@@ -11,3 +11,45 @@ function filter_string(string $string, string $pattern = '^a-zA-Z0-9_-'): string
   $pattern = $pattern ?: '^a-zA-Z0-9_-';
   return preg_replace("/[$pattern]/", '_', $string);
 }
+
+/**
+ * Convert a string to pascal case.
+ *
+ * @param string $string The string to convert.
+ * @return string The pascal case string.
+ */
+function to_pascal_case(string $string): string
+{
+  $chunks = preg_split('/[^a-zA-Z0-9]/', $string);
+
+  $output = '';
+
+  foreach ($chunks as $chunk)
+  {
+    $output .= ucfirst(strtolower($chunk));
+  }
+
+  return $output;
+}
+
+/**
+ * Convert a string to camel case.
+ *
+ * @param string $string The string to convert.
+ * @return string The camel case string.
+ */
+function to_camel_case(string $string): string
+{
+  return lcfirst(to_pascal_case($string));
+}
+
+/**
+ * Convert a string to snake case.
+ *
+ * @param string $string The string to convert.
+ * @return string The snake case string.
+ */
+function to_snake_case(string $string): string
+{
+  return strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $string));
+}
