@@ -53,3 +53,14 @@ function to_snake_case(string $string): string
 {
   return strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $string));
 }
+
+/**
+ * Convert a string to kebab case.
+ *
+ * @param string $string The string to convert.
+ * @return string The kebab case string.
+ */
+function to_title_case(string $string): string
+{
+  return ucwords($string);
+}
