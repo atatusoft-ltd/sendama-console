@@ -81,6 +81,10 @@ class NewGame extends Command
     // Create project configuration
     $this->createProjectConfiguration($projectName);
 
+    // Tell user cd into the project directory
+    $this->log(sprintf('\e[2;37m;cd %s/\e[0m', basename($this->targetDirectory)), true);
+    $this->log(sprintf('\e[2;37m;php %s.php\e[0m', basename($this->targetDirectory)), true);
+
     // Done
     $this->log('Done!', true);
     return Command::SUCCESS;
@@ -112,13 +116,15 @@ class NewGame extends Command
   /**
    * Get the project configuration.
    *
-   * @param mixed $projectName
-   * @return string
+   * @param string $packageName The package name.
+   * @return string The project configuration.
    */
-  private function getProjectConfiguration(mixed $projectName): string
+  private function getProjectConfiguration(string $packageName): string
   {
+    $projectName = basename($this->targetDirectory);
+
     return json_encode([
-      'name' => $projectName,
+      'name' => $packageName,
       'version' => '1.0.0',
       'description' => 'A new 2D ASCII terminal game.',
       'type' => 'project',
@@ -132,7 +138,7 @@ class NewGame extends Command
       ],
       'autoload' => [
         'psr-4' => [
-          'Sendama\\Game\\' . strtoupper(filter_string($projectName) ) . '\\' => 'assets/'
+          'Sendama\\Game\\' . to_title_case($projectName) . '\\' => 'assets/'
         ]
       ],
       'config' => [
