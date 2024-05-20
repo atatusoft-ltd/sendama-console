@@ -5,6 +5,8 @@ by amasiye313@gmail.com
 
 Sendama CLI is a console application that provides a command line interface for the Sendama 2D Game Engine. It is used to create, build, run and manage Sendama projects.
 
+![Screenshot](docs/screenshot.png)
+
 ## Requirements
 
 - PHP 8.3 or newer
@@ -15,17 +17,41 @@ Sendama CLI is a console application that provides a command line interface for 
 ## Installation
 
 ### For Linux, BSD etc
+
+To install Sendama CLI, run the following command in your terminal:
 ```bash
-composer global require sendamaphp/cli
+composer global require sendamaphp/console
+```
+
+If you haven't already, add Composer's system-wide vendor bin directory to your $PATH. This directory is at `~/.composer/vendor/bin` or `~/.config/composer/vendor/bin`.
+
+```bash
+export PATH="$PATH:$HOME/.composer/vendor/bin"
+```
+
+Alternatively, you can link the `sendama` executable to a directory that is already in your $PATH. For example, you can link it to `/usr/local/bin`:
+
+```bash
+sudo ln -s ~/.composer/vendor/bin/sendama /usr/local/bin/sendama
+```
+
+or 
+
+```bash
+sudo ln -s ~/.config/composer/vendor/bin/sendama /usr/local/bin/sendama
+```
+
+Then, you can run the `sendama` command in your terminal.
+
+```bash
+sendama --help
 ```
 
 ### For Windows
 From the WSL terminal follow Linux instructions
 
 ### OSX
-```bash
-composer global require sendamaphp/cli
-```
+From the OSX terminal follow Linux instructions
 
 ## Usage
 ```bash
