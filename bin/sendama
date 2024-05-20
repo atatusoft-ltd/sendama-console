@@ -4,6 +4,7 @@
 use Sendama\Console\Commands\GeneratePrefab;
 use Sendama\Console\Commands\GenerateScene;
 use Sendama\Console\Commands\GenerateScript;
+use Sendama\Console\Commands\GenerateSplashScreen;
 use Sendama\Console\Commands\GenerateTexture;
 use Sendama\Console\Commands\GenerateTilemap;
 use Sendama\Console\Commands\GenerateTileset;
@@ -34,6 +35,7 @@ function bootstrap(): void
       new GenerateTexture(),
       new GenerateTilemap(),
       new GenerateTileset(),
+      new GenerateSplashScreen()
     ]);
 
     $app->run();

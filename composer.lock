@@ -4,8 +4,67 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3b8599b308674bc51bde85655c107d3c",
+    "content-hash": "b7de6cac0cd444d05bc9b7bdea46ec85",
     "packages": [
+        {
+            "name": "amasiye/figlet",
+            "version": "1.2.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/amasiye/figlet.git",
+                "reference": "5a420aa817e960da37fd0a7043abf78c213d63e7"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/amasiye/figlet/zipball/5a420aa817e960da37fd0a7043abf78c213d63e7",
+                "reference": "5a420aa817e960da37fd0a7043abf78c213d63e7",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.2",
+                "symfony/console": "^7.0"
+            },
+            "require-dev": {
+                "pestphp/pest": "^2.34"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.0-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Amasiye\\Figlet\\": "src/Figlet"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Povilas Susinskas",
+                    "email": "povilassusinskas@gmail.com"
+                },
+                {
+                    "name": "Andrew Masiye",
+                    "email": "amasiye313@gmail.com"
+                }
+            ],
+            "description": "Figlet text generator - PHP",
+            "keywords": [
+                "ascii",
+                "figlet",
+                "github",
+                "php",
+                "text"
+            ],
+            "support": {
+                "source": "https://github.com/amasiye/figlet/tree/1.2.0"
+            },
+            "time": "2024-05-20T14:35:35+00:00"
+        },
         {
             "name": "psr/container",
             "version": "2.0.2",
