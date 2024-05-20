@@ -66,5 +66,13 @@ function to_snake_case(string $string): string
  */
 function to_title_case(string $string): string
 {
-  return ucwords($string);
+  $tokens = preg_split('/[^a-zA-Z0-9]/', $string);
+  $output = '';
+
+  foreach ($tokens as $i => $token)
+  {
+    $output .= ucfirst(strtolower($token));
+  }
+
+  return $output;
 }
