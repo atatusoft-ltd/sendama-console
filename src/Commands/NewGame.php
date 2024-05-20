@@ -6,6 +6,7 @@ use RuntimeException;
 use Sendama\Console\Util\Path;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Helper\QuestionHelper;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -24,10 +25,14 @@ class NewGame extends Command
   private ?InputInterface $input = null;
 
   // Directories
+  /**
+   * @var string The target directory.
+   */
   private string $targetDirectory = '';
-  private string $assetsDirectory = '';
+  /**
+   * @var string The maps' directory.
+   */
   private string $mapsDirectory = '';
-  private string $prefabsDirectory = '';
 
   public function configure(): void
   {
@@ -86,8 +91,8 @@ class NewGame extends Command
 
     // Tell user cd into the project directory
     $this->log("\nTo get started:", true);
-    $this->log(sprintf("\n\033[2;37mcd %s/\e[0m", basename($this->targetDirectory)), true);
-    $this->log(sprintf("\033[2;37mphp %s.php\e[0m\n", basename($this->targetDirectory)), true);
+    $this->log(sprintf("\n\033[2;37m\tcd %s/\e[0m", basename($this->targetDirectory)), true);
+    $this->log(sprintf("\033[2;37m\tphp %s.php\e[0m\n", basename($this->targetDirectory)), true);
 
     return Command::SUCCESS;
   }
@@ -109,6 +114,7 @@ class NewGame extends Command
    */
   private function confirm(string $question, bool $default = false): bool
   {
+    /** @var QuestionHelper $helper */
     $helper = $this->getHelper('question');
     $question = new ConfirmationQuestion($question, $default);
 
@@ -159,11 +165,20 @@ class NewGame extends Command
    */
   private function getPackageName(string $default): string
   {
-
+    $default = strtolower(filter_string($default));
+    /** @var QuestionHelper $helper */
     $helper = $this->getHelper('question');
     $question = new Question(sprintf('Package name: (%s) ', $default), $default);
 
-    return $helper->ask($this->input, $this->output, $question);
+    $packageName = $helper->ask($this->input, $this->output, $question);
+
+    $validPackageNamePattern = '/[a-zA-Z0-9_]+(-*[a-zA-Z0-9_]*)*\/[a-zA-Z0-9_]+(-*[a-zA-Z0-9_]*)*/';
+    if (! preg_match($validPackageNamePattern, $packageName) )
+    {
+      throw new RuntimeException('Invalid package name');
+    }
+
+    return $packageName;
   }
 
   /**
@@ -287,10 +302,10 @@ class NewGame extends Command
    */
   private function createAssetsPrefabsDirectory(string $assetsDirectory): void
   {
-    $this->prefabsDirectory = Path::join($assetsDirectory, 'Prefabs');
-    if (! mkdir($this->prefabsDirectory) && ! is_dir($this->prefabsDirectory))
+    $prefabsDirectory = Path::join($assetsDirectory, 'Prefabs');
+    if (! mkdir($prefabsDirectory) && ! is_dir($prefabsDirectory))
     {
-      throw new RuntimeException(sprintf('Directory "%s" was not created', $this->prefabsDirectory));
+      throw new RuntimeException(sprintf('Directory "%s" was not created', $prefabsDirectory));
     }
   }
 
