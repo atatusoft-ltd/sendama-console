@@ -114,6 +114,7 @@ class NewGame extends Command
    */
   private function confirm(string $question, bool $default = false): bool
   {
+    /** @var QuestionHelper $helper */
     $helper = $this->getHelper('question');
     $question = new ConfirmationQuestion($question, $default);
 
@@ -171,7 +172,7 @@ class NewGame extends Command
 
     $packageName = $helper->ask($this->input, $this->output, $question);
 
-    $validPackageNamePattern = '/[a-zA-Z0-9_]+([-]*[a-zA-Z0-9_]*)*\/[a-zA-Z0-9_]+([-]*[a-zA-Z0-9_]*)*/';
+    $validPackageNamePattern = '/[a-zA-Z0-9_]+(-*[a-zA-Z0-9_]*)*\/[a-zA-Z0-9_]+(-*[a-zA-Z0-9_]*)*/';
     if (! preg_match($validPackageNamePattern, $packageName) )
     {
       throw new RuntimeException('Invalid package name');
@@ -301,7 +302,6 @@ class NewGame extends Command
    */
   private function createAssetsPrefabsDirectory(string $assetsDirectory): void
   {
-    $prefabsDirectory = '';
     $prefabsDirectory = Path::join($assetsDirectory, 'Prefabs');
     if (! mkdir($prefabsDirectory) && ! is_dir($prefabsDirectory))
     {
