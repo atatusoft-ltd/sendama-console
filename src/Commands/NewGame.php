@@ -129,7 +129,8 @@ class NewGame extends Command
    */
   private function getProjectConfiguration(string $packageName): string
   {
-    $projectName = basename($this->targetDirectory);
+    [$organization, $projectName] = explode('/', $packageName);
+    $namespace = to_title_case($organization) . '\\' . to_title_case($projectName) . '\\';
 
     return json_encode([
       'name' => $packageName,
@@ -146,7 +147,7 @@ class NewGame extends Command
       ],
       'autoload' => [
         'psr-4' => [
-          'Sendama\\Game\\' . to_title_case($projectName) . '\\' => 'assets/'
+          $namespace => 'assets/'
         ]
       ],
       'config' => [
