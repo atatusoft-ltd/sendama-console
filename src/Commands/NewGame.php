@@ -165,7 +165,6 @@ class NewGame extends Command
    */
   private function getPackageName(string $default): string
   {
-    $default = strtolower(filter_string($default));
     /** @var QuestionHelper $helper */
     $helper = $this->getHelper('question');
     $question = new Question(sprintf('Package name: (%s) ', $default), $default);
@@ -199,10 +198,11 @@ class NewGame extends Command
   /**
    * Create the project configuration.
    *
-   * @param mixed $projectName The project name.
+   * @param string $projectName The project name.
    */
-  private function createProjectConfiguration(mixed $projectName): void
+  private function createProjectConfiguration(string $projectName): void
   {
+    $projectName = strtolower(filter_string($projectName));
     $this->log('Creating project configuration...');
     $packageName = $this->getPackageName("sendama-engine/$projectName");
 
