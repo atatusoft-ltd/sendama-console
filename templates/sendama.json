@@ -1,6 +1,8 @@
 {
   "project": {
-    "name": "",
-    "description": ""
+    "name": "game",
+    "description": "A simple ASCII terminal game",
+    "version": "0.0.1",
+    "main": "game.php"
   }
 }
