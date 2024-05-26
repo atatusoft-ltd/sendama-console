@@ -141,7 +141,7 @@ class NewGame extends Command
    */
   private function getProjectConfiguration(string $projectName): string
   {
-    $mainFilename = strtolower(filter_string($projectName)) . 'php';
+    $mainFilename = strtolower(filter_string($projectName)) . '.php';
 
     return json_encode([
       'name' => $projectName,
