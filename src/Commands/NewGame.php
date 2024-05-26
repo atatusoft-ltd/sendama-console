@@ -20,8 +20,17 @@ use Symfony\Component\Console\Question\Question;
 )]
 class NewGame extends Command
 {
+  /**
+   * @var bool Whether the command is in verbose mode.
+   */
   private bool $isVerbose = false;
+  /**
+   * @var OutputInterface|null The output interface.
+   */
   private ?OutputInterface $output = null;
+  /**
+   * @var InputInterface|null The input interface.
+   */
   private ?InputInterface $input = null;
 
   // Directories
@@ -34,6 +43,9 @@ class NewGame extends Command
    */
   private string $mapsDirectory = '';
 
+  /**
+   * @inheritDoc
+   */
   public function configure(): void
   {
     $this
@@ -124,10 +136,28 @@ class NewGame extends Command
   /**
    * Get the project configuration.
    *
+   * @param string $projectName The project name.
+   * @return string The project configuration.
+   */
+  private function getProjectConfiguration(string $projectName): string
+  {
+    $mainFilename = strtolower(filter_string($projectName)) . 'php';
+
+    return json_encode([
+      'name' => $projectName,
+      'description' => 'A 2D ASCII terminal game.',
+      'version' => '0.0.1',
+      'main' => $mainFilename,
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+  }
+
+  /**
+   * Get the project configuration.
+   *
    * @param string $packageName The package name.
    * @return string The project configuration.
    */
-  private function getProjectConfiguration(string $packageName): string
+  private function getComposerConfiguration(string $packageName): string
   {
     [$organization, $projectName] = explode('/', $packageName);
     $namespace = to_title_case($organization) . '\\' . to_title_case($projectName) . '\\';
@@ -203,12 +233,20 @@ class NewGame extends Command
    */
   private function createProjectConfiguration(string $projectName): void
   {
-    $projectName = strtolower(filter_string($projectName));
     $this->log('Creating project configuration...');
+
+    $targetConfigFilename = Path::join($this->targetDirectory, 'sendama.json');
+    if (false === file_put_contents($targetConfigFilename, $this->getProjectConfiguration($projectName)))
+    {
+      throw new RuntimeException(sprintf('Unable to write to file "%s"', $targetConfigFilename));
+    }
+
+    $this->log('Creating package configuration');
+    $projectName = strtolower(filter_string($projectName));
     $packageName = $this->getPackageName("sendama-engine/$projectName");
 
     $targetConfigFilename = Path::join($this->targetDirectory, 'composer.json');
-    if (false === file_put_contents($targetConfigFilename, $this->getProjectConfiguration($packageName)))
+    if (false === file_put_contents($targetConfigFilename, $this->getComposerConfiguration($packageName)))
     {
       throw new RuntimeException(sprintf('Unable to write to file "%s"', $targetConfigFilename));
     }
