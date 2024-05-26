@@ -9,6 +9,7 @@ use Sendama\Console\Commands\GenerateTexture;
 use Sendama\Console\Commands\GenerateTilemap;
 use Sendama\Console\Commands\GenerateTileset;
 use Sendama\Console\Commands\NewGame;
+use Sendama\Console\Commands\PlayCommand;
 use Symfony\Component\Console\Application;
 
 if (file_exists(__DIR__ . '/../vendor/autoload.php'))
@@ -29,6 +30,7 @@ function bootstrap(): void
 
     $app->addCommands([
       new NewGame(),
+      new PlayCommand(),
       new GeneratePrefab(),
       new GenerateScene(),
       new GenerateScript(),
