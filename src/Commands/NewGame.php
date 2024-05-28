@@ -50,7 +50,7 @@ class NewGame extends Command
   {
     $this
       ->addArgument('name', InputArgument::REQUIRED, 'The name of the game')
-      ->addArgument('directory', InputArgument::OPTIONAL, 'The directory to create the game in', getcwd());
+      ->addOption('directory', ['d', 'dir'], InputArgument::OPTIONAL, 'The directory to create the game in', getcwd());
   }
 
   /**
@@ -67,7 +67,7 @@ class NewGame extends Command
     $projectName = $input->getArgument('name');
     $this->targetDirectory = Path::join(
       $this->targetDirectory,
-      $input->getArgument('directory'),
+      $input->getOption('directory'),
       strtolower(filter_string($projectName))
     );
 
