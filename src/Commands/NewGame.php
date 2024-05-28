@@ -103,7 +103,8 @@ class NewGame extends Command
 
     // Tell user cd into the project directory
     $this->log("\nTo get started:", true);
-    $this->log(sprintf("\n\033[2;37m\tcd %s/\e[0m", basename($this->targetDirectory)), true);
+    $targetDirectory = $input->getOption('directory') !== null ? $input->getOption('directory') : basename($this->targetDirectory);
+    $this->log(sprintf("\n\033[2;37m\tcd %s/\e[0m", $targetDirectory), true);
     $this->log(sprintf("\033[2;37m\tphp %s.php\e[0m\n", basename($this->targetDirectory)), true);
 
     return Command::SUCCESS;
