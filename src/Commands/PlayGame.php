@@ -14,7 +14,7 @@ use Symfony\Component\Console\Output\OutputInterface;
     aliases: ['p'],
     hidden: true
 )]
-class PlayCommand extends Command
+class PlayGame extends Command
 {
   public function configure(): void
   {
