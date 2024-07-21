@@ -12,7 +12,6 @@ use Symfony\Component\Console\Output\OutputInterface;
     name: 'play',
     description: 'Start playing the game',
     aliases: ['p'],
-    hidden: true
 )]
 class PlayGame extends Command
 {
@@ -45,7 +44,11 @@ class PlayGame extends Command
     }
 
     // Start the game using the main file
-    `php $directory/{$config['main']}`;
+    if (false === passthru("php $directory/{$config['main']}" ) )
+    {
+      $output->writeln('Failed to start the game.');
+      return Command::FAILURE;
+    }
 
     return Command::SUCCESS;
   }
