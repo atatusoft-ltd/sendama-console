@@ -2,7 +2,6 @@
 
 namespace Sendama\Console\Commands;
 
-use PHPUnit\Util\Color;
 use Sendama\Console\Util\Inspector;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -32,8 +31,7 @@ class Update extends Command
     # Check if we are in a
     $updateResult = `cd $directory && composer update --ansi`;
 
-    if (! $updateResult )
-    {
+    if (! $updateResult ) {
       $output->writeln($this->getHeader('Update failed.', "\e[0;41m"));
       return Command::FAILURE;
     }

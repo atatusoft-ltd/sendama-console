@@ -49,11 +49,11 @@ class PlayGame extends Command
     if ( env('DEBUG_MODE', false) ) {
       $gameName = $config->name ?? env('GAME_NAME', 'Sendama Game');
       $output->writeln([
-        "<fg=gray>[DEBUG_MODE] enabled</>",
-        "<comment>Starting Sendama project...</comment>",
+        "<question> INFO </question> Debug mode enabled",
         "",
-        "Game name: <fg=gray>$gameName</>",
-        "Game directory: <fg=gray>$directory</>"
+        "<question> LOG </question> Starting Sendama project...",
+        "<question> LOG </question> GAME NAME: <fg=gray>$gameName</>",
+        "<question> LOG </question> GAME DIRECTORY: <fg=gray>$directory</>"
       ]);
       usleep(2500000);
     }

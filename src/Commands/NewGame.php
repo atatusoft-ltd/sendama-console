@@ -495,7 +495,7 @@ class NewGame extends Command
   }
 
   /**
-   * Create the docs directory.
+   * Create the docs' directory.
    *
    * @param string $targetDirectory The target directory.
    * @return void
