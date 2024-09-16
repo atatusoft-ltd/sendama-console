@@ -2,6 +2,7 @@
 
 namespace Sendama\Console\Commands;
 
+use Sendama\Console\Strategies\AssetFileGeneration\ScriptFileGenerationStrategy;
 use Sendama\Console\Util\Config\ComposerConfig;
 use Sendama\Console\Util\Config\ProjectConfig;
 use Sendama\Console\Util\Inspector;
@@ -32,6 +33,11 @@ class GenerateScript extends Command
    * @var ProjectConfig|null
    */
   protected ?ProjectConfig $projectConfig = null;
+  /**
+   * The composer configuration.
+   *
+   * @var ComposerConfig|null
+   */
   protected ?ComposerConfig $composerConfig = null;
 
   public function configure(): void
@@ -44,20 +50,7 @@ class GenerateScript extends Command
 
   public function execute(InputInterface $input, OutputInterface $output): int
   {
-    // TODO: Implement execute() method.
-    $this->projectConfig = new ProjectConfig($input, $output);
-    $this->composerConfig = new ComposerConfig($input, $output);
-    $this->inspector = new Inspector($input, $output);
-    $name = $input->getArgument('name');
-    $directory = $input->getOption('directory') ?? '.';
-
-    $this->inspector->validateProjectDirectory();
-
-    $filename = Path::join(getcwd() ?: '', $directory, 'Scripts', to_pascal_case($name) . '.php');
-
-    $output->writeln("Creating script <comment>$filename</comment>");
-    $output->writeln("<comment>Namespace:</comment> {$this->composerConfig->getNamespace()}");
-
-    return Command::SUCCESS;
+    $generationStrategy = new ScriptFileGenerationStrategy($input, $output, $input->getArgument('name') ?? 'script', 'scripts');
+    return $generationStrategy->generate();
   }
 }
