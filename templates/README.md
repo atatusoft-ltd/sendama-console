@@ -18,3 +18,16 @@ sendama play
 ```
 
 ![Screenshot](docs/screenshot.gif)
+
+## Creating Gameplay
+
+Sendama provides a simple API for creating games. You can create game objects, define their properties, and add them to 
+the game world.
+
+There are some topics that you should be familiar with before creating a game with Sendama:
+
+| Topic                    | Description                                                             |
+|--------------------------|-------------------------------------------------------------------------|
+| [Scenes](docs/scenes.md) | Understand scenes and how to create and work with scenes in Sendama.    |
+| [Game Objects](docs/game-objects.md) | Learn how to create game objects and how they work with components.     |
+| [Components](docs/components.md) | Understand components and how they can be used to modify game behavior. |
