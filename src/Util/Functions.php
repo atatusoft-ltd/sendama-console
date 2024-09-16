@@ -28,8 +28,7 @@ function to_pascal_case(string $string): string
 
   $output = '';
 
-  foreach ($chunks as $chunk)
-  {
+  foreach ($chunks as $chunk) {
     $output .= ucfirst(strtolower($chunk));
   }
 
@@ -64,15 +63,36 @@ function to_snake_case(string $string): string
  * @param string $string The string to convert.
  * @return string The kebab case string.
  */
+function to_kebab_case(string $string): string
+{
+  return str_replace('_', '-', to_snake_case($string));
+}
+
+/**
+ * Convert a string to kebab case.
+ *
+ * @param string $string The string to convert.
+ * @return string The kebab case string.
+ */
 function to_title_case(string $string): string
 {
   $tokens = preg_split('/[^a-zA-Z0-9]/', $string);
   $output = '';
 
-  foreach ($tokens as $i => $token)
-  {
+  foreach ($tokens as $i => $token) {
     $output .= ucfirst(strtolower($token));
   }
 
   return $output;
+}
+
+if (! function_exists('env') ) {
+  function env(string $key, mixed $default = null): mixed
+  {
+    if (isset($_ENV[$key]) ) {
+      return $_ENV[$key];
+    }
+
+    return $default;
+  }
 }
