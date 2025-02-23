@@ -22,17 +22,17 @@ class Update extends Command
 
   public function execute(InputInterface $input, OutputInterface $output): int
   {
-    $output->writeln($this->getHeader('Updating the game...'));
+    write_console_info('Updating the game...');
     $directory = $input->getOption('directory') ?? '.';
 
     $inspector = new Inspector($input, $output);
     $inspector->validateProjectDirectory($directory);
 
     # Check if we are in a
-    $updateResult = `cd $directory && composer update --ansi`;
+    $updateResult = exec('cd $directory && composer update --ansi');
 
-    if (! $updateResult ) {
-      $output->writeln($this->getHeader('Update failed.', "\e[0;41m"));
+    if (false === $updateResult ) {
+      write_console_error('Update failed.');
       return Command::FAILURE;
     }
 

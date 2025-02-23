@@ -39,6 +39,7 @@ abstract class AbstractAssetFileGenerationStrategy implements AssetFileGeneratio
   protected string $classPath = '';
   protected string $className = '';
   protected string $relativeFilename = '';
+  protected string $suffix = '';
 
   /**
    * AssetFileGenerationStrategy constructor.
@@ -47,6 +48,7 @@ abstract class AbstractAssetFileGenerationStrategy implements AssetFileGeneratio
    * @param OutputInterface $output
    * @param string $filename
    * @param string $directory
+   * @param string|null $fileExtension
    */
   public function __construct(
     protected InputInterface  $input,
@@ -66,6 +68,11 @@ abstract class AbstractAssetFileGenerationStrategy implements AssetFileGeneratio
 
     foreach ($nameTokens as $token) {
       $this->classPath = Path::join($this->classPath, to_pascal_case($token));
+    }
+
+    if ($this->suffix) {
+      $this->suffix = to_pascal_case($this->suffix);
+      $this->classPath = $this->classPath . $this->suffix;
     }
 
     $this->className = basename($this->classPath);
