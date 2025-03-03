@@ -23,7 +23,8 @@
   "require": {
     "php": ">=8.3",
     "symfony/console": "^7.0",
-    "amasiye/figlet": "^1.2"
+    "amasiye/figlet": "^1.2",
+    "vlucas/phpdotenv": "^5.6"
   },
   "config": {
     "allow-plugins": {

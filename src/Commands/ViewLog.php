@@ -41,9 +41,8 @@ class ViewLog extends Command
     $type = $input->getArgument('type') ?? LogOption::ALL->value;
     $directory = $input->getOption('directory') ?? '.';
 
-    if (! is_dir($directory) )
-    {
-      $output->writeln("Directory $directory not found.");
+    if (! is_dir($directory) ) {
+      $output->writeln("<error>Directory $directory not found.</error>");
       return Command::FAILURE;
     }
 
@@ -51,18 +50,14 @@ class ViewLog extends Command
 
     $logFilename = str_replace('all.log', '*', $logFilename);
 
-    if (! file_exists($logFilename) && $type !== LogOption::ALL->value)
-    {
-      $output->writeln("Log file $logFilename not found.");
+    if (! file_exists($logFilename) && $type !== LogOption::ALL->value) {
+      $output->writeln("<error>Log file $logFilename not found.</error>");
       return Command::FAILURE;
     }
 
-    if (shell_exec('which multitail'))
-    {
+    if (shell_exec('which multitail')) {
       `multitail $logFilename`;
-    }
-    else
-    {
+    } else {
       `tail $logFilename`;
     }
 

@@ -3,6 +3,12 @@
     "name": "game",
     "description": "A simple ASCII terminal game",
     "version": "0.0.1",
-    "main": "game.php"
+    "main": "game.php",
+    "player": {
+      "screen": {
+        "width": 110,
+        "height": 30
+      }
+    }
   }
 }

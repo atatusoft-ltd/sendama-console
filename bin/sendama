@@ -1,6 +1,7 @@
 #!/usr/bin/env php
 <?php
 
+use Sendama\Console\Commands\GenerateEvent;
 use Sendama\Console\Commands\GeneratePrefab;
 use Sendama\Console\Commands\GenerateScene;
 use Sendama\Console\Commands\GenerateScript;
@@ -14,19 +15,15 @@ use Sendama\Console\Commands\Update;
 use Sendama\Console\Commands\ViewLog;
 use Symfony\Component\Console\Application;
 
-if (file_exists(__DIR__ . '/../vendor/autoload.php'))
-{
+if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
   require __DIR__ . '/../vendor/autoload.php';
-}
-else
-{
+} else {
   require __DIR__ . '/../../../autoload.php';
 }
 
 function bootstrap(): void
 {
-  try
-  {
+  try {
     $composer = json_decode(file_get_contents(__DIR__ . '/../composer.json'), true);
     $app = new Application("Sendama CLI");
 
@@ -34,6 +31,7 @@ function bootstrap(): void
       new NewGame(),
       new PlayGame(),
       new GeneratePrefab(),
+      new GenerateEvent(),
       new GenerateScene(),
       new GenerateScript(),
       new GenerateTexture(),
@@ -45,9 +43,7 @@ function bootstrap(): void
     ]);
 
     $app->run();
-  }
-  catch (Exception $e)
-  {
+  } catch (Exception $e) {
     echo $e->getMessage();
     exit(1);
   }
