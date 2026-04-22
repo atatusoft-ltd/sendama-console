@@ -84,6 +84,7 @@ class NewGame extends Command
         $this->createAssetsScenesDirectory($assetsDirectory);
         $this->createAssetsScriptsDirectory($assetsDirectory);
         $this->createAssetsMapsDirectory($assetsDirectory);
+        $this->createAssetsMaterialsDirectory($assetsDirectory);
         $this->createAssetsPrefabsDirectory($assetsDirectory);
         $this->createAssetsTexturesDirectory($assetsDirectory);
 
@@ -235,6 +236,25 @@ class NewGame extends Command
 
         if (!mkdir($this->mapsDirectory) && !is_dir($this->mapsDirectory)) {
             throw new RuntimeException(sprintf('Directory "%s" was not created', $this->mapsDirectory));
+        }
+    }
+
+    /**
+     * Create the assets' materials directory.
+     *
+     * @param string $assetsDirectory The assets' directory.
+     */
+    private function createAssetsMaterialsDirectory(string $assetsDirectory): void
+    {
+        $materialsDirectory = Path::join($assetsDirectory, 'Materials');
+
+        if (file_exists($materialsDirectory)) {
+            $this->output->writeln('<comment>Materials directory already exists...</comment>', OutputInterface::VERBOSITY_VERBOSE);
+            return;
+        }
+
+        if (!mkdir($materialsDirectory) && !is_dir($materialsDirectory)) {
+            throw new RuntimeException(sprintf('Directory "%s" was not created', $materialsDirectory));
         }
     }
 

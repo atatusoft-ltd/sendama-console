@@ -3,6 +3,7 @@
 use Assegai\Collections\ItemList;
 use Atatusoft\Termutil\Events\MouseEvent;
 use Sendama\Console\Editor\Editor;
+use Sendama\Console\Editor\EditorSettings;
 use Sendama\Console\Editor\DTOs\SceneDTO;
 use Sendama\Console\Editor\PrefabWriter;
 use Sendama\Console\Editor\IO\InputManager;
@@ -13,6 +14,7 @@ use Sendama\Console\Editor\Widgets\ConsolePanel;
 use Sendama\Console\Editor\Widgets\HierarchyPanel;
 use Sendama\Console\Editor\Widgets\InspectorPanel;
 use Sendama\Console\Editor\Widgets\MainPanel;
+use Sendama\Console\Editor\Widgets\OptionListModal;
 use Sendama\Console\Editor\Widgets\PanelListModal;
 use Sendama\Console\Editor\Widgets\Snackbar;
 
@@ -86,6 +88,172 @@ test('editor loads the selected prefab asset into a hierarchy-style inspector on
         ->toContain('▼ EnemyComponent')
         ->toContain('Move Speed: 1')
         ->and($mainPanel->getActiveTab())->toBe('Scene');
+});
+
+test('editor loads the selected scene asset into the hierarchy on enter activation', function () {
+    $workspace = createEditorSceneSelectionWorkspace();
+    [$editor, $reflection, $assetsPanel, $mainPanel, $inspectorPanel] = createEditorForAssetSelection($workspace);
+
+    $assetsPanel->expandSelection();
+    $assetsPanel->moveSelection(1);
+    $assetsPanel->activateSelection();
+
+    $synchronizeInspectorPanel = $reflection->getMethod('synchronizeInspectorPanel');
+    $synchronizeInspectorPanel->setAccessible(true);
+    $synchronizeInspectorPanel->invoke($editor);
+
+    $loadedScene = $reflection->getProperty('loadedScene');
+    $focusedPanel = $reflection->getProperty('focusedPanel');
+    $hierarchyPanel = $reflection->getProperty('hierarchyPanel');
+    $inspectionTarget = new ReflectionProperty(InspectorPanel::class, 'inspectionTarget');
+    $sceneObjects = new ReflectionProperty(MainPanel::class, 'sceneObjects');
+    $loadedScene->setAccessible(true);
+    $focusedPanel->setAccessible(true);
+    $hierarchyPanel->setAccessible(true);
+    $inspectionTarget->setAccessible(true);
+    $sceneObjects->setAccessible(true);
+
+    $activeHierarchyPanel = $hierarchyPanel->getValue($editor);
+    $activeLoadedScene = $loadedScene->getValue($editor);
+
+    expect($activeLoadedScene)->toBeInstanceOf(SceneDTO::class)
+        ->and($activeLoadedScene->name)->toBe('level01')
+        ->and($activeLoadedScene->width)->toBe(96)
+        ->and($activeLoadedScene->height)->toBe(28)
+        ->and($activeLoadedScene->hierarchy[0]['name'] ?? null)->toBe('Player')
+        ->and($inspectionTarget->getValue($inspectorPanel))->toMatchArray([
+            'context' => 'scene',
+            'name' => 'level01',
+            'type' => 'Scene',
+            'path' => 'scene',
+        ])
+        ->and($sceneObjects->getValue($mainPanel)[0]['name'] ?? null)->toBe('Player')
+        ->and($mainPanel->getActiveTab())->toBe('Scene')
+        ->and($focusedPanel->getValue($editor))->toBe($activeHierarchyPanel)
+        ->and($activeHierarchyPanel->content[0] ?? null)->toContain('level01')
+        ->and(implode("\n", $activeHierarchyPanel->content))->toContain('• Player');
+
+    $configuration = json_decode((string) file_get_contents($workspace . '/sendama.json'), true);
+
+    expect($configuration['editor']['scenes']['active'] ?? null)->toBe(0)
+        ->and($configuration['editor']['scenes']['loaded'] ?? null)->toBe(['Scenes/level01.scene.php']);
+});
+
+test('editor opens the selected material asset into an editable material inspector on enter activation', function () {
+    $workspace = createEditorMaterialSelectionWorkspace();
+    [$editor, $reflection, $assetsPanel, $mainPanel, $inspectorPanel] = createEditorForAssetSelection($workspace);
+
+    $assetsPanel->expandSelection();
+    $assetsPanel->moveSelection(1);
+    $assetsPanel->activateSelection();
+
+    $synchronizeInspectorPanel = $reflection->getMethod('synchronizeInspectorPanel');
+    $synchronizeInspectorPanel->setAccessible(true);
+    $synchronizeInspectorPanel->invoke($editor);
+
+    $inspectionTarget = new ReflectionProperty(InspectorPanel::class, 'inspectionTarget');
+    $inspectionTarget->setAccessible(true);
+    $contentText = implode("\n", $inspectorPanel->content);
+
+    expect($inspectionTarget->getValue($inspectorPanel))->toMatchArray([
+        'context' => 'material_asset',
+        'name' => 'Perfectly Elastic',
+        'type' => 'Physics Material',
+    ]);
+    expect($contentText)->toContain('Type: Physics Material')
+        ->toContain('File: perfectly-elastic.material.php')
+        ->toContain('Name: Perfectly Elastic')
+        ->toContain('Friction:')
+        ->toContain('Bounciness:')
+        ->and($mainPanel->getActiveTab())->toBe('Scene');
+});
+
+test('editor saves physics material edits back to the asset file', function () {
+    $workspace = createEditorMaterialSelectionWorkspace();
+    [$editor, $reflection, $assetsPanel, $mainPanel, $inspectorPanel] = createEditorForAssetSelection($workspace);
+
+    $assetsPanel->expandSelection();
+    $assetsPanel->moveSelection(1);
+    $assetsPanel->activateSelection();
+
+    $synchronizeInspectorPanel = $reflection->getMethod('synchronizeInspectorPanel');
+    $synchronizeInspectorPanel->setAccessible(true);
+    $synchronizeInspectorPanel->invoke($editor);
+
+    $focusableControls = new ReflectionProperty(InspectorPanel::class, 'focusableControls');
+    $focusableControls->setAccessible(true);
+    $applyControlValueToInspectionTarget = new ReflectionMethod(InspectorPanel::class, 'applyControlValueToInspectionTarget');
+    $applyControlValueToInspectionTarget->setAccessible(true);
+
+    $frictionControl = null;
+
+    foreach ($focusableControls->getValue($inspectorPanel) as $control) {
+        if ($control instanceof \Sendama\Console\Editor\Widgets\Controls\InputControl && $control->getLabel() === 'Friction') {
+            $frictionControl = $control;
+            break;
+        }
+    }
+
+    expect($frictionControl)->toBeInstanceOf(\Sendama\Console\Editor\Widgets\Controls\InputControl::class);
+
+    $frictionControl->setValue(0.3);
+    $applyControlValueToInspectionTarget->invoke($inspectorPanel, $frictionControl);
+
+    $synchronizeInspectorAssetChanges = $reflection->getMethod('synchronizeInspectorAssetChanges');
+    $synchronizeInspectorAssetChanges->setAccessible(true);
+    $synchronizeInspectorAssetChanges->invoke($editor);
+
+    $material = require $workspace . '/Assets/Materials/perfectly-elastic.material.php';
+
+    expect($material['friction'] ?? null)->toBe(0.3)
+        ->and($material['bounciness'] ?? null)->toBe(1.0)
+        ->and($mainPanel->getActiveTab())->toBe('Scene');
+});
+
+test('editor remembers the last loaded scene across restarts', function () {
+    $workspace = createEditorSceneSelectionWorkspace();
+    [$editor, $reflection, $assetsPanel] = createEditorForAssetSelection($workspace);
+
+    $assetsPanel->expandSelection();
+    $assetsPanel->moveSelection(1);
+    $assetsPanel->activateSelection();
+
+    $synchronizeInspectorPanel = $reflection->getMethod('synchronizeInspectorPanel');
+    $synchronizeInspectorPanel->setAccessible(true);
+    $synchronizeInspectorPanel->invoke($editor);
+
+    $settings = EditorSettings::loadFromDirectory($workspace);
+    $sceneLoader = new \Sendama\Console\Editor\SceneLoader($workspace);
+    $reloadedScene = $sceneLoader->load($settings->scenes);
+
+    expect($reloadedScene)->toBeInstanceOf(SceneDTO::class)
+        ->and($reloadedScene->name)->toBe('level01')
+        ->and($reloadedScene->sourcePath)->toBe($workspace . '/Assets/Scenes/level01.scene.php');
+});
+
+test('editor requests confirmation before closing with unsaved scene changes', function () {
+    $workspace = createEditorSceneSelectionWorkspace();
+    [$editor, $reflection] = createEditorForAssetSelection($workspace);
+
+    $loadedScene = new SceneDTO(
+        name: 'level01',
+        isDirty: true,
+        hierarchy: [],
+        sourcePath: $workspace . '/Assets/Scenes/level01.scene.php',
+    );
+    $reflection->getProperty('loadedScene')->setValue($editor, $loadedScene);
+
+    $requestEditorClose = $reflection->getMethod('requestEditorClose');
+    $requestEditorClose->setAccessible(true);
+    $requestEditorClose->invoke($editor);
+
+    $closeConfirmModal = $reflection->getProperty('closeConfirmModal');
+    $closeConfirmModal->setAccessible(true);
+    $modal = $closeConfirmModal->getValue($editor);
+
+    expect($modal)->toBeInstanceOf(OptionListModal::class)
+        ->and($modal->isVisible())->toBeTrue()
+        ->and($modal->getSelectedOption())->toBe('Save and Quit');
 });
 
 test('editor creates a prefab from the selected hierarchy object and focuses the inspector', function () {
@@ -641,6 +809,65 @@ function createEditorAssetSelectionWorkspace(): string
     return $workspace;
 }
 
+function createEditorSceneSelectionWorkspace(): string
+{
+    $workspace = sys_get_temp_dir() . '/sendama-editor-scene-selection-' . uniqid();
+    mkdir($workspace . '/Assets/Scenes', 0777, true);
+
+    file_put_contents($workspace . '/sendama.json', json_encode([
+        'name' => 'Scene Selection Test',
+        'editor' => [
+            'scenes' => [
+                'active' => 0,
+                'loaded' => ['Scenes/bootstrap.scene.php'],
+            ],
+        ],
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+    file_put_contents($workspace . '/Assets/Scenes/level01.scene.php', <<<'PHP'
+<?php
+
+return [
+    'name' => 'level01',
+    'width' => 96,
+    'height' => 28,
+    'environmentTileMapPath' => 'Maps/example',
+    'hierarchy' => [
+        [
+            'type' => 'Sendama\\Engine\\Core\\GameObject',
+            'name' => 'Player',
+            'tag' => 'Player',
+            'position' => ['x' => 12, 'y' => 8],
+            'rotation' => ['x' => 0, 'y' => 0],
+            'scale' => ['x' => 1, 'y' => 1],
+            'components' => [],
+        ],
+    ],
+];
+PHP);
+
+    return $workspace;
+}
+
+function createEditorMaterialSelectionWorkspace(): string
+{
+    $workspace = sys_get_temp_dir() . '/sendama-editor-material-selection-' . uniqid();
+    mkdir($workspace . '/Assets/Materials', 0777, true);
+
+    file_put_contents($workspace . '/Assets/Materials/perfectly-elastic.material.php', <<<'PHP'
+<?php
+
+return [
+    'type' => 'physics',
+    'name' => 'Perfectly Elastic',
+    'friction' => 0.0,
+    'bounciness' => 1.0,
+];
+PHP);
+
+    return $workspace;
+}
+
 function createEditorAssetCreationWorkspace(): string
 {
     $workspace = sys_get_temp_dir() . '/sendama-editor-asset-creation-' . uniqid();
@@ -801,12 +1028,14 @@ function createEditorForAssetSelection(string $workspace): array
 
     $editorReflection->getProperty('workingDirectory')->setValue($editor, $workspace);
     $editorReflection->getProperty('assetsDirectoryPath')->setValue($editor, $workspace . '/Assets');
+    $editorReflection->getProperty('settings')->setValue($editor, EditorSettings::loadFromDirectory($workspace));
     $editorReflection->getProperty('hierarchyPanel')->setValue($editor, $hierarchyPanel);
     $editorReflection->getProperty('assetsPanel')->setValue($editor, $assetsPanel);
     $editorReflection->getProperty('mainPanel')->setValue($editor, $mainPanel);
     $editorReflection->getProperty('consolePanel')->setValue($editor, $consolePanel);
     $editorReflection->getProperty('inspectorPanel')->setValue($editor, $inspectorPanel);
     $editorReflection->getProperty('panelListModal')->setValue($editor, new PanelListModal());
+    $editorReflection->getProperty('closeConfirmModal')->setValue($editor, new OptionListModal(title: 'Unsaved Changes'));
     $editorReflection->getProperty('commandLineModal')->setValue($editor, new CommandLineModal());
     $editorReflection->getProperty('commandHelpModal')->setValue($editor, new CommandHelpModal());
     $editorReflection->getProperty('snackbar')->setValue($editor, new Snackbar());

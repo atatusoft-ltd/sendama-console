@@ -175,6 +175,32 @@ test('assets panel marks activated script files for terminal-editor opening', fu
     ]);
 });
 
+test('assets panel queues material asset creation requests', function () {
+    $workspace = sys_get_temp_dir() . '/sendama-assets-panel-material-create-' . uniqid();
+    mkdir($workspace . '/Assets', 0777, true);
+
+    $panel = new AssetsPanel(
+        width: 40,
+        height: 12,
+        assetsDirectoryPath: $workspace . '/Assets',
+        workingDirectory: $workspace,
+    );
+
+    $handleModalSelection = new ReflectionMethod(AssetsPanel::class, 'handleModalSelection');
+    $handleModalSelection->setAccessible(true);
+
+    $modalState = new ReflectionProperty(AssetsPanel::class, 'modalState');
+    $modalState->setAccessible(true);
+    $modalState->setValue($panel, 'create_asset_kind');
+
+    $handleModalSelection->invoke($panel, 'Material');
+
+    expect($panel->consumeCreationRequest())->toBe([
+        'kind' => 'material',
+        'workingDirectory' => $workspace,
+    ]);
+});
+
 
 test('assets panel queues the selected asset for deletion when confirmed', /** @throws Exception */function () {
     $workspace = sys_get_temp_dir() . '/sendama-assets-panel-' . uniqid();

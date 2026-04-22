@@ -9,6 +9,7 @@ use Atatusoft\Termutil\Events\Traits\ObservableTrait;
 use Atatusoft\Termutil\IO\Console\Console;
 use Atatusoft\Termutil\UI\Windows\Window;
 use Sendama\Console\Commands\GenerateEvent;
+use Sendama\Console\Commands\GenerateMaterial;
 use Sendama\Console\Commands\GeneratePrefab;
 use Sendama\Console\Commands\GenerateScene;
 use Sendama\Console\Commands\GenerateScript;
@@ -150,12 +151,14 @@ final class Editor implements ObservableInterface
     protected int $terminalHeight = DEFAULT_TERMINAL_HEIGHT;
     protected PanelListModal $panelListModal;
     protected ?OptionListModal $projectNormalizationModal = null;
+    protected OptionListModal $closeConfirmModal;
     protected CommandLineModal $commandLineModal;
     protected CommandHelpModal $commandHelpModal;
     protected bool $shouldRefreshBackgroundUnderModal = false;
     protected bool $didRenderOverlayLastFrame = false;
     protected SceneWriter $sceneWriter;
     protected PrefabWriter $prefabWriter;
+    protected MaterialWriter $materialWriter;
     protected ?ProjectNormalizer $projectNormalizer = null;
     protected array $projectDiscrepancies = [];
     protected Snackbar $snackbar;
@@ -189,6 +192,7 @@ final class Editor implements ObservableInterface
             $this->initializeConsole();
             $this->sceneWriter = new SceneWriter();
             $this->prefabWriter = new PrefabWriter();
+            $this->materialWriter = new MaterialWriter();
             $this->initializeWidgets();
             $this->watchedAssetSnapshot = $this->captureWatchedAssetSnapshot();
             $this->lastAssetWatchPollAt = microtime(true);
@@ -550,6 +554,30 @@ final class Editor implements ObservableInterface
             return;
         }
 
+        if ($this->closeConfirmModal->isVisible()) {
+            $this->didRenderOverlayLastFrame = true;
+            $this->closeConfirmModal->syncLayout($this->terminalWidth, $this->terminalHeight);
+
+            if ($this->shouldRefreshBackgroundUnderModal || $shouldRefreshForSnackbar) {
+                $this->renderEditorFrame();
+            }
+
+            if ($this->shouldRefreshBackgroundUnderModal || $this->closeConfirmModal->isDirty() || $shouldRefreshForSnackbar) {
+                $this->closeConfirmModal->render();
+
+                if ($hasActiveSnackbar) {
+                    $this->snackbar->render();
+                }
+
+                $this->closeConfirmModal->markClean();
+                $this->snackbar->markClean();
+                $this->shouldRefreshBackgroundUnderModal = false;
+            }
+
+            $this->notify(new EditorEvent(EventType::EDITOR_RENDERED->value, $this));
+            return;
+        }
+
         if ($this->commandLineModal->isVisible()) {
             $this->didRenderOverlayLastFrame = true;
             $this->commandLineModal->syncLayout($this->terminalWidth, $this->terminalHeight);
@@ -827,6 +855,7 @@ final class Editor implements ObservableInterface
     {
         $this->panels = new ItemList(Widget::class);
         $this->panelListModal = new PanelListModal();
+        $this->closeConfirmModal = new OptionListModal(title: 'Unsaved Changes');
         $this->commandLineModal = new CommandLineModal();
         $this->commandHelpModal = new CommandHelpModal();
         $this->hierarchyPanel = new HierarchyPanel(
@@ -886,6 +915,11 @@ final class Editor implements ObservableInterface
 
         if ($this->panelListModal->isVisible()) {
             $this->handlePanelListModalMouseEvent($mouseEvent);
+            return;
+        }
+
+        if ($this->closeConfirmModal->isVisible()) {
+            $this->handleCloseConfirmModalMouseEvent($mouseEvent);
             return;
         }
 
@@ -990,6 +1024,25 @@ final class Editor implements ObservableInterface
         $this->shouldRefreshBackgroundUnderModal = true;
     }
 
+    private function handleCloseConfirmModalMouseEvent(MouseEvent $mouseEvent): void
+    {
+        if ($this->closeConfirmModal->handleScrollbarMouseEvent($mouseEvent)) {
+            return;
+        }
+
+        if ($mouseEvent->buttonIndex !== 0 || $mouseEvent->action !== 'Pressed') {
+            return;
+        }
+
+        $selection = $this->closeConfirmModal->clickOptionAtPoint($mouseEvent->x, $mouseEvent->y);
+
+        if (!is_string($selection) || $selection === '') {
+            return;
+        }
+
+        $this->handleCloseConfirmSelection($selection);
+    }
+
     private function setFocusedPanel(Widget $panel): void
     {
         if ($this->focusedPanel === $panel) {
@@ -1014,7 +1067,7 @@ final class Editor implements ObservableInterface
     private function handlePanelKeyboardWorkflow(): void
     {
         if (Input::isKeyDown(IO\Enumerations\KeyCode::CTRL_C)) {
-            $this->stop();
+            $this->requestEditorClose();
             return;
         }
 
@@ -1040,6 +1093,11 @@ final class Editor implements ObservableInterface
 
         if ($this->panelListModal->isVisible()) {
             $this->handlePanelListModalInput();
+            return;
+        }
+
+        if ($this->closeConfirmModal->isVisible()) {
+            $this->handleCloseConfirmModalInput();
             return;
         }
 
@@ -1340,6 +1398,68 @@ final class Editor implements ObservableInterface
         }
     }
 
+    private function handleCloseConfirmModalInput(): void
+    {
+        if (Input::isKeyDown(IO\Enumerations\KeyCode::ESCAPE)) {
+            $this->closeConfirmModal->hide();
+            $this->shouldRefreshBackgroundUnderModal = true;
+            return;
+        }
+
+        if (Input::isKeyDown(IO\Enumerations\KeyCode::UP)) {
+            $this->closeConfirmModal->moveSelection(-1);
+            return;
+        }
+
+        if (Input::isKeyDown(IO\Enumerations\KeyCode::DOWN)) {
+            $this->closeConfirmModal->moveSelection(1);
+            return;
+        }
+
+        if (Input::isKeyDown(IO\Enumerations\KeyCode::ENTER)) {
+            $selection = $this->closeConfirmModal->getSelectedOption();
+
+            if (is_string($selection) && $selection !== '') {
+                $this->handleCloseConfirmSelection($selection);
+            }
+        }
+    }
+
+    private function requestEditorClose(): void
+    {
+        if ($this->loadedScene instanceof DTOs\SceneDTO && $this->loadedScene->isDirty) {
+            $this->closeConfirmModal->show(
+                ['Save and Quit', 'Quit Without Saving', 'Cancel'],
+                title: 'Unsaved Changes'
+            );
+            $this->closeConfirmModal->syncLayout($this->terminalWidth, $this->terminalHeight);
+            $this->shouldRefreshBackgroundUnderModal = true;
+            return;
+        }
+
+        $this->stop();
+    }
+
+    private function handleCloseConfirmSelection(string $selection): void
+    {
+        $this->closeConfirmModal->hide();
+        $this->shouldRefreshBackgroundUnderModal = true;
+
+        if ($selection === 'Cancel') {
+            return;
+        }
+
+        if ($selection === 'Save and Quit') {
+            $didSave = $this->saveLoadedScene();
+
+            if (!$didSave || ($this->loadedScene instanceof DTOs\SceneDTO && $this->loadedScene->isDirty)) {
+                return;
+            }
+        }
+
+        $this->stop();
+    }
+
     private function showCommandLineModal(): void
     {
         $this->commandLineModal->show();
@@ -1483,6 +1603,11 @@ final class Editor implements ObservableInterface
                 $this->openAssetInConfiguredEditor($asset);
             }
 
+            if ($openInMainPanel && $this->isSceneAsset($asset)) {
+                $this->loadSceneAssetIntoEditor($asset);
+                return;
+            }
+
             if ($openInMainPanel && $this->isEditableSpriteAsset($asset)) {
                 $this->mainPanel->loadSpriteAsset($asset);
                 $this->mainPanel->selectTab('Sprite');
@@ -1578,9 +1703,17 @@ final class Editor implements ObservableInterface
     {
         $mutation = $this->inspectorPanel->consumeAssetMutation();
 
+        if (!is_array($mutation)) {
+            return;
+        }
+
+        if (($mutation['operation'] ?? null) === 'save_material') {
+            $this->saveMaterialAssetMutation($mutation);
+            return;
+        }
+
         if (
-            !is_array($mutation)
-            || !is_string($mutation['path'] ?? null)
+            !is_string($mutation['path'] ?? null)
             || $mutation['path'] === ''
             || !is_string($mutation['name'] ?? null)
         ) {
@@ -2074,6 +2207,10 @@ final class Editor implements ObservableInterface
 
         $hasChangedPhpAsset = $this->hasChangedPhpAsset($changedAssetPaths);
 
+        if ($hasChangedPhpAsset) {
+            $this->inspectorPanel->invalidateProjectScriptMetadataCaches();
+        }
+
         switch ($inspectionTarget['context'] ?? null) {
             case 'hierarchy':
                 if (!$hasChangedPhpAsset || !$this->refreshLoadedSceneComponentMetadata()) {
@@ -2160,6 +2297,34 @@ final class Editor implements ObservableInterface
                 }
 
                 $this->inspectorPanel->inspectTarget($this->buildAssetInspectionTarget($asset));
+                return;
+
+            case 'material_asset':
+                $assetPath = $this->resolveInspectionAssetAbsolutePath($inspectionTarget);
+
+                if (
+                    !is_string($assetPath)
+                    || $assetPath === ''
+                    || !$this->didWatchedAssetChange($assetPath, $changedAssetPaths)
+                ) {
+                    return;
+                }
+
+                $asset = $this->resolveAssetEntryByAbsolutePath($assetPath);
+
+                if (!is_array($asset)) {
+                    $this->inspectorPanel->inspectTarget(null);
+                    return;
+                }
+
+                $materialInspectionTarget = $this->buildMaterialInspectionTarget($asset);
+
+                if (!is_array($materialInspectionTarget)) {
+                    $this->inspectorPanel->inspectTarget($this->buildAssetInspectionTarget($asset));
+                    return;
+                }
+
+                $this->inspectorPanel->inspectTarget($materialInspectionTarget);
                 return;
         }
     }
@@ -2999,6 +3164,10 @@ final class Editor implements ObservableInterface
                 'command' => GeneratePrefab::class,
                 'baseName' => 'new-prefab',
             ],
+            'material' => [
+                'command' => GenerateMaterial::class,
+                'baseName' => 'new-material',
+            ],
             'texture' => [
                 'command' => GenerateTexture::class,
                 'baseName' => 'new-texture',
@@ -3572,6 +3741,14 @@ final class Editor implements ObservableInterface
 
     private function buildAssetInspectionTarget(array $asset, bool $activatePrefab = false): array
     {
+        if ($activatePrefab && $this->isMaterialAsset($asset)) {
+            $materialInspectionTarget = $this->buildMaterialInspectionTarget($asset);
+
+            if (is_array($materialInspectionTarget)) {
+                return $materialInspectionTarget;
+            }
+        }
+
         if ($activatePrefab && $this->isPrefabAsset($asset)) {
             $prefabInspectionTarget = $this->buildPrefabInspectionTarget($asset);
 
@@ -3585,6 +3762,48 @@ final class Editor implements ObservableInterface
             'name' => $asset['name'] ?? basename((string) ($asset['path'] ?? '')),
             'type' => ($asset['isDirectory'] ?? false) ? 'Folder' : 'File',
             'value' => $asset,
+        ];
+    }
+
+    private function buildMaterialInspectionTarget(array $asset): ?array
+    {
+        $materialPath = is_string($asset['path'] ?? null) ? $asset['path'] : null;
+
+        if (!is_string($materialPath) || $materialPath === '' || !is_file($materialPath)) {
+            return null;
+        }
+
+        try {
+            $materialData = require $materialPath;
+        } catch (Throwable) {
+            return null;
+        }
+
+        if (!is_array($materialData)) {
+            return null;
+        }
+
+        $materialType = strtolower(trim((string) ($materialData['type'] ?? 'physics')));
+
+        if ($materialType !== 'physics') {
+            return null;
+        }
+
+        $normalizedMaterial = [
+            'type' => 'physics',
+            'name' => is_string($materialData['name'] ?? null) && trim($materialData['name']) !== ''
+                ? trim($materialData['name'])
+                : basename((string) ($asset['name'] ?? basename($materialPath)), '.material.php'),
+            'friction' => max(0.0, min(1.0, (float) ($materialData['friction'] ?? 0.5))),
+            'bounciness' => max(0.0, min(1.0, (float) ($materialData['bounciness'] ?? 0.5))),
+        ];
+
+        return [
+            'context' => 'material_asset',
+            'name' => $normalizedMaterial['name'],
+            'type' => 'Physics Material',
+            'asset' => $asset,
+            'value' => $normalizedMaterial,
         ];
     }
 
@@ -3612,6 +3831,46 @@ final class Editor implements ObservableInterface
         ];
     }
 
+    private function loadSceneAssetIntoEditor(array $asset): bool
+    {
+        $scenePath = is_string($asset['path'] ?? null) ? Path::normalize($asset['path']) : null;
+
+        if (!is_string($scenePath) || $scenePath === '') {
+            $this->consolePanel->append('[ERROR] - Selected scene path could not be resolved.');
+            $this->pushNotification('Selected scene path could not be resolved.', 'error');
+            return false;
+        }
+
+        if ($this->loadedScene instanceof DTOs\SceneDTO && $this->loadedScene->isDirty) {
+            $this->consolePanel->append('[WARN] - Save the current scene before loading another one.');
+            $this->pushNotification('Save the current scene before loading another one.', 'warning');
+            return false;
+        }
+
+        $scene = (new SceneLoader($this->workingDirectory))->loadFromPath($scenePath);
+
+        if (!$scene instanceof DTOs\SceneDTO) {
+            $this->consolePanel->append('[ERROR] - Failed to load the selected scene.');
+            $this->pushNotification('Failed to load the selected scene.', 'error');
+            return false;
+        }
+
+        $this->persistLoadedSceneSelection($scenePath);
+        $this->loadedScene = $scene;
+        $this->hierarchyPanel->syncHierarchy($scene->hierarchy);
+        $this->hierarchyPanel->selectPath('scene');
+        $this->mainPanel->setSceneObjects($scene->hierarchy);
+        $this->mainPanel->selectTab('Scene');
+        $this->mainPanel->selectSceneObject(null);
+        $this->syncScenePanels($scene->isDirty);
+        $this->inspectorPanel->inspectTarget($this->buildSceneInspectionTarget());
+        $this->setFocusedPanel($this->hierarchyPanel);
+        $this->consolePanel->append('[INFO] - Loaded scene ' . basename($scenePath) . '.');
+        $this->pushNotification('Loaded scene ' . basename($scenePath) . '.', 'success');
+
+        return true;
+    }
+
     private function isPrefabAsset(?array $asset): bool
     {
         if (!is_array($asset) || ($asset['isDirectory'] ?? false)) {
@@ -3623,6 +3882,141 @@ final class Editor implements ObservableInterface
             : (is_string($asset['path'] ?? null) ? $asset['path'] : null);
 
         return is_string($assetPath) && str_ends_with(strtolower($assetPath), '.prefab.php');
+    }
+
+    private function isSceneAsset(?array $asset): bool
+    {
+        if (!is_array($asset) || ($asset['isDirectory'] ?? false)) {
+            return false;
+        }
+
+        $assetPath = is_string($asset['relativePath'] ?? null)
+            ? $asset['relativePath']
+            : (is_string($asset['path'] ?? null) ? $asset['path'] : null);
+
+        return is_string($assetPath) && str_ends_with(strtolower($assetPath), '.scene.php');
+    }
+
+    private function isMaterialAsset(?array $asset): bool
+    {
+        if (!is_array($asset) || ($asset['isDirectory'] ?? false)) {
+            return false;
+        }
+
+        $assetPath = is_string($asset['relativePath'] ?? null)
+            ? $asset['relativePath']
+            : (is_string($asset['path'] ?? null) ? $asset['path'] : null);
+
+        return is_string($assetPath) && str_ends_with(strtolower($assetPath), '.material.php');
+    }
+
+    private function saveMaterialAssetMutation(array $mutation): void
+    {
+        $materialPath = is_string($mutation['path'] ?? null) ? $mutation['path'] : null;
+        $materialValue = is_array($mutation['value'] ?? null) ? $mutation['value'] : null;
+
+        if (!is_string($materialPath) || $materialPath === '' || !is_array($materialValue)) {
+            return;
+        }
+
+        if (!isset($this->materialWriter)) {
+            $this->materialWriter = new MaterialWriter();
+        }
+
+        if (!$this->materialWriter->save($materialPath, $materialValue)) {
+            $this->consolePanel->append('[ERROR] - Failed to save material ' . basename($materialPath) . '.');
+            $this->pushNotification('Failed to save material ' . basename($materialPath) . '.', 'error');
+            return;
+        }
+
+        $asset = is_array($mutation['asset'] ?? null)
+            ? $mutation['asset']
+            : [
+                'name' => basename($materialPath),
+                'path' => $materialPath,
+                'relativePath' => $this->buildRelativeAssetPath($materialPath),
+                'isDirectory' => false,
+                'children' => [],
+            ];
+
+        $asset['name'] = basename($materialPath);
+        $asset['path'] = $materialPath;
+        $asset['relativePath'] = $this->buildRelativeAssetPath($materialPath);
+
+        $this->assetsPanel->reloadAssets();
+        $this->assetsPanel->selectAssetByAbsolutePath($materialPath);
+        $this->assetsPanel->consumeInspectionRequest();
+
+        $materialInspectionTarget = $this->buildMaterialInspectionTarget($asset);
+
+        if (is_array($materialInspectionTarget)) {
+            $this->inspectorPanel->inspectTarget($materialInspectionTarget);
+        }
+
+        $this->consolePanel->append('[INFO] - Saved material ' . basename($materialPath) . '.');
+        $this->pushNotification('Saved material ' . basename($materialPath) . '.', 'success');
+    }
+
+    private function persistLoadedSceneSelection(string $sceneSourcePath): void
+    {
+        $sceneReference = $this->buildRelativeAssetPath($sceneSourcePath);
+
+        if ($sceneReference === '') {
+            return;
+        }
+
+        $loadedScenes = $this->settings->scenes->loaded;
+        $existingIndex = array_search($sceneReference, $loadedScenes, true);
+
+        if ($existingIndex !== false) {
+            $activeIndex = $existingIndex;
+        } elseif ($loadedScenes === []) {
+            $loadedScenes[] = $sceneReference;
+            $activeIndex = 0;
+        } else {
+            $activeIndex = $this->settings->scenes->active;
+
+            if (isset($loadedScenes[$activeIndex])) {
+                $loadedScenes[$activeIndex] = $sceneReference;
+            } else {
+                $loadedScenes[] = $sceneReference;
+                $activeIndex = count($loadedScenes) - 1;
+            }
+        }
+
+        $this->settings->scenes->loaded = array_values($loadedScenes);
+        $this->settings->scenes->active = $activeIndex;
+
+        $settingsPath = Path::join($this->workingDirectory, 'sendama.json');
+        $settingsData = [];
+
+        if (is_file($settingsPath)) {
+            $settingsContents = file_get_contents($settingsPath);
+            $decodedSettings = is_string($settingsContents) ? json_decode($settingsContents, true) : null;
+
+            if (is_array($decodedSettings)) {
+                $settingsData = $decodedSettings;
+            }
+        }
+
+        if (!is_array($settingsData['editor'] ?? null)) {
+            $settingsData['editor'] = [];
+        }
+
+        $settingsData['editor']['scenes'] = [
+            'active' => $activeIndex,
+            'loaded' => $this->settings->scenes->loaded,
+        ];
+
+        if (is_array($settingsData['scenes'] ?? null)) {
+            $settingsData['scenes']['active'] = $activeIndex;
+            $settingsData['scenes']['loaded'] = $this->settings->scenes->loaded;
+        }
+
+        file_put_contents(
+            $settingsPath,
+            json_encode($settingsData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL
+        );
     }
 
     private function resolveProjectDirectoryForAsset(array $asset): string
@@ -4122,12 +4516,12 @@ final class Editor implements ObservableInterface
         return substr($sanitizedLabel, 0, 30);
     }
 
-    private function saveLoadedScene(): void
+    private function saveLoadedScene(): bool
     {
         if (!$this->loadedScene instanceof DTOs\SceneDTO) {
             $this->consolePanel->append('[INFO] - No scene loaded to save.');
             $this->pushNotification('No scene loaded to save.', 'info');
-            return;
+            return false;
         }
 
         $sceneWasDirty = $this->loadedScene->isDirty;
@@ -4161,13 +4555,14 @@ final class Editor implements ObservableInterface
             $this->syncScenePanels(false);
             $this->consolePanel->append('[INFO] - Saved scene ' . $this->loadedScene->name . '.scene.php');
             $this->pushNotification('Saved scene ' . $this->loadedScene->name . '.scene.php', 'success');
-            return;
+            return true;
         }
 
         $this->loadedScene->isDirty = $sceneWasDirty;
         $this->syncScenePanels($sceneWasDirty);
         $this->consolePanel->append('[ERROR] - Failed to save scene.');
         $this->pushNotification('Failed to save scene.', 'error');
+        return false;
     }
 
     private function applySceneMutation(array $value): bool
