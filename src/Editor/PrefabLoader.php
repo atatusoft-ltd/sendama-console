@@ -139,6 +139,31 @@ function normalize_editor_value(mixed $value): mixed
         }
     }
 
+    if (is_a($value, '\Sendama\Engine\Physics\PhysicsMaterial')) {
+        $assetPath = method_exists($value, 'getAssetPath')
+            ? $value->getAssetPath()
+            : ($value->assetPath ?? $value->path ?? null);
+        $assetPath = is_string($assetPath) ? trim(str_replace('\\', '/', $assetPath)) : '';
+
+        if ($assetPath !== '') {
+            return $assetPath;
+        }
+
+        $normalizedMaterial = [
+            'friction' => (float)($value->friction ?? 0.5),
+            'bounciness' => (float)($value->bounciness ?? 0.5),
+        ];
+        $name = method_exists($value, 'getName')
+            ? $value->getName()
+            : ($value->name ?? null);
+
+        if (is_string($name) && trim($name) !== '') {
+            $normalizedMaterial['name'] = trim($name);
+        }
+
+        return $normalizedMaterial;
+    }
+
     if (
         (is_a($value, '\Sendama\Engine\Core\Rect')
             || (method_exists($value, 'getWidth') && method_exists($value, 'getHeight')))
@@ -475,6 +500,393 @@ function resolve_property_type(ReflectionProperty $property): ?string
     return null;
 }
 
+function is_builtin_type_name(string $typeName): bool
+{
+    return in_array(strtolower($typeName), [
+        'array',
+        'bool',
+        'callable',
+        'false',
+        'float',
+        'int',
+        'iterable',
+        'mixed',
+        'never',
+        'null',
+        'object',
+        'self',
+        'static',
+        'string',
+        'true',
+    ], true);
+}
+
+function resolve_primary_field_type_name(?string $fieldType): ?string
+{
+    if (!is_string($fieldType) || trim($fieldType) === '') {
+        return null;
+    }
+
+    foreach (explode('|', $fieldType) as $candidateType) {
+        $normalizedType = ltrim(trim($candidateType), '\\');
+
+        if ($normalizedType === '' || strtolower($normalizedType) === 'null') {
+            continue;
+        }
+
+        return $normalizedType;
+    }
+
+    return null;
+}
+
+function resolve_representative_collection_value(mixed $value): mixed
+{
+    if (!is_array($value) || $value === []) {
+        return null;
+    }
+
+    foreach ($value as $item) {
+        return $item;
+    }
+
+    return null;
+}
+
+function resolve_range_attribute_metadata(ReflectionProperty $property): ?array
+{
+    $attributes = $property->getAttributes('Sendama\Engine\Core\Attributes\Range');
+
+    if ($attributes === []) {
+        return null;
+    }
+
+    try {
+        $attribute = $attributes[0]->newInstance();
+        $minimum = $attribute->min ?? null;
+        $maximum = $attribute->max ?? null;
+        $step = $attribute->step ?? 1;
+    } catch (Throwable) {
+        return null;
+    }
+
+    if (!is_int($minimum) && !is_float($minimum)) {
+        return null;
+    }
+
+    if (!is_int($maximum) && !is_float($maximum)) {
+        return null;
+    }
+
+    if (!is_int($step) && !is_float($step)) {
+        $step = 1;
+    }
+
+    if ($step == 0) {
+        $step = 1;
+    }
+
+    if ($minimum > $maximum) {
+        [$minimum, $maximum] = [$maximum, $minimum];
+    }
+
+    return [
+        'min' => $minimum,
+        'max' => $maximum,
+        'step' => abs($step),
+    ];
+}
+
+function resolve_class_import_aliases(ReflectionClass $scope): array
+{
+    $fileName = $scope->getFileName();
+
+    if (!is_string($fileName) || !is_file($fileName)) {
+        return [];
+    }
+
+    $source = file_get_contents($fileName);
+
+    if (!is_string($source) || $source === '') {
+        return [];
+    }
+
+    $aliases = [];
+
+    if (preg_match_all('/^\s*use\s+([^;]+);/mi', $source, $matches) === 1 || count($matches[1] ?? []) > 0) {
+        foreach ($matches[1] as $importClause) {
+            if (!is_string($importClause) || str_contains($importClause, '{')) {
+                continue;
+            }
+
+            $normalizedClause = trim($importClause);
+            $alias = basename(str_replace('\\', '/', $normalizedClause));
+            $typeReference = $normalizedClause;
+
+            if (preg_match('/^(.+)\s+as\s+([A-Za-z_][A-Za-z0-9_]*)$/i', $normalizedClause, $aliasMatches) === 1) {
+                $typeReference = trim($aliasMatches[1]);
+                $alias = trim($aliasMatches[2]);
+            }
+
+            $aliases[strtolower($alias)] = ltrim($typeReference, '\\');
+        }
+    }
+
+    return $aliases;
+}
+
+function resolve_docblock_type_reference(ReflectionClass $scope, string $typeReference): ?string
+{
+    $normalizedTypeReference = trim($typeReference);
+
+    if ($normalizedTypeReference === '') {
+        return null;
+    }
+
+    if ($normalizedTypeReference[0] === '\\') {
+        return ltrim($normalizedTypeReference, '\\');
+    }
+
+    if (is_builtin_type_name($normalizedTypeReference)) {
+        return strtolower($normalizedTypeReference);
+    }
+
+    if (str_contains($normalizedTypeReference, '\\')) {
+        return ltrim($normalizedTypeReference, '\\');
+    }
+
+    $importAliases = resolve_class_import_aliases($scope);
+    $normalizedAlias = strtolower($normalizedTypeReference);
+
+    if (isset($importAliases[$normalizedAlias])) {
+        return $importAliases[$normalizedAlias];
+    }
+
+    $namespace = $scope->getNamespaceName();
+
+    return $namespace !== ''
+        ? $namespace . '\\' . $normalizedTypeReference
+        : $normalizedTypeReference;
+}
+
+function extract_collection_item_type_expression(string $typeExpression): ?string
+{
+    $normalizedExpression = trim($typeExpression);
+
+    if ($normalizedExpression === '') {
+        return null;
+    }
+
+    $unionMembers = array_values(array_filter(array_map('trim', explode('|', $normalizedExpression))));
+
+    foreach ($unionMembers as $unionMember) {
+        if (strtolower($unionMember) === 'null') {
+            continue;
+        }
+
+        if (preg_match('/^(.+)\[\]$/', $unionMember, $matches) === 1) {
+            return trim($matches[1]);
+        }
+
+        if (preg_match('/^(?:array|list)<(.+)>$/', $unionMember, $matches) === 1) {
+            $innerType = trim($matches[1]);
+            $segments = array_values(array_filter(array_map('trim', explode(',', $innerType))));
+
+            return $segments === [] ? null : end($segments);
+        }
+    }
+
+    return null;
+}
+
+function resolve_collection_item_field_type(ReflectionProperty $property): ?string
+{
+    $docComment = $property->getDocComment();
+
+    if (!is_string($docComment) || $docComment === '') {
+        return null;
+    }
+
+    if (preg_match('/@var\s+([^\s]+)/', $docComment, $matches) !== 1) {
+        return null;
+    }
+
+    $typeExpression = trim($matches[1]);
+    $collectionItemType = extract_collection_item_type_expression($typeExpression);
+
+    if ($collectionItemType === null) {
+        return null;
+    }
+
+    return resolve_docblock_type_reference($property->getDeclaringClass(), $collectionItemType);
+}
+
+function is_compound_structure_type(string $typeName): bool
+{
+    $normalizedType = ltrim(trim($typeName), '\\');
+
+    if (
+        $normalizedType === ''
+        || is_builtin_type_name($normalizedType)
+        || enum_exists($normalizedType)
+        || interface_exists($normalizedType)
+        || !class_exists($normalizedType)
+    ) {
+        return false;
+    }
+
+    if (in_array($normalizedType, [
+        'Sendama\\Engine\\Core\\GameObject',
+        'Sendama\\Engine\\UI\\UIElement',
+        'Sendama\\Engine\\UI\\Interfaces\\UIElementInterface',
+        'Sendama\\Engine\\Core\\Vector2',
+        'Sendama\\Engine\\Core\\Rect',
+        'Sendama\\Engine\\Core\\Texture',
+        'Sendama\\Engine\\Core\\Sprite',
+        'Sendama\\Engine\\Physics\\PhysicsMaterial',
+    ], true)) {
+        return false;
+    }
+
+    if (
+        is_a($normalizedType, 'Sendama\\Engine\\Core\\Component', true)
+        || is_a($normalizedType, 'Sendama\\Engine\\Core\\GameObject', true)
+        || is_a($normalizedType, 'Sendama\\Engine\\UI\\UIElement', true)
+    ) {
+        return false;
+    }
+
+    return true;
+}
+
+function resolve_compound_structure_field_schemas(string $typeName, array $currentValue): array
+{
+    try {
+        $reflection = new ReflectionClass($typeName);
+    } catch (Throwable) {
+        return [];
+    }
+
+    $schemas = [];
+
+    foreach ($reflection->getProperties() as $property) {
+        if (
+            $property->isStatic()
+            || !(
+                $property->isPublic()
+                || $property->getAttributes('Sendama\Engine\Core\Behaviours\Attributes\SerializeField') !== []
+            )
+            || (method_exists($property, 'isVirtual') && $property->isVirtual())
+        ) {
+            continue;
+        }
+
+        $propertyName = $property->getName();
+        $schemas[$propertyName] = resolve_component_property_field_schema(
+            $property,
+            $currentValue[$propertyName] ?? null,
+        );
+    }
+
+    return $schemas;
+}
+
+function build_component_field_schema(
+    ?string $fieldType,
+    mixed $currentValue,
+    ?ReflectionClass $scope = null,
+): array {
+    $schema = [];
+
+    if (is_string($fieldType) && trim($fieldType) !== '') {
+        $schema['type'] = $fieldType;
+    }
+
+    $primaryType = resolve_primary_field_type_name($fieldType);
+
+    if ($primaryType !== null && is_compound_structure_type($primaryType)) {
+        $schema['properties'] = resolve_compound_structure_field_schemas(
+            $primaryType,
+            is_array($currentValue) ? $currentValue : [],
+        );
+    }
+
+    if (
+        !isset($schema['item'])
+        && is_array($currentValue)
+        && array_is_list($currentValue)
+        && $currentValue !== []
+    ) {
+        $schema['item'] = build_component_field_schema(
+            null,
+            resolve_representative_collection_value($currentValue),
+            $scope,
+        );
+    }
+
+    return $schema;
+}
+
+function resolve_component_property_field_schema(
+    ReflectionProperty $property,
+    mixed $currentValue,
+    ?string $fallbackType = null,
+): array {
+    $resolvedType = resolve_property_type($property) ?? $fallbackType;
+    $schema = build_component_field_schema(
+        $resolvedType,
+        $currentValue,
+        $property->getDeclaringClass(),
+    );
+    $range = resolve_range_attribute_metadata($property);
+
+    if ($range !== null) {
+        $schema['range'] = $range;
+    }
+
+    $collectionItemType = resolve_collection_item_field_type($property);
+
+    if ($collectionItemType !== null) {
+        $schema['item'] = build_component_field_schema(
+            $collectionItemType,
+            resolve_representative_collection_value($currentValue),
+            $property->getDeclaringClass(),
+        );
+    }
+
+    return $schema;
+}
+
+function extract_component_editor_field_schemas(object $component): array
+{
+    $fieldSchemas = [];
+    $reflection = new ReflectionObject($component);
+
+    foreach ($reflection->getProperties() as $property) {
+        $isSerializable = $property->isPublic()
+            || $property->getAttributes('Sendama\Engine\Core\Behaviours\Attributes\SerializeField') !== [];
+
+        if (!$isSerializable) {
+            continue;
+        }
+
+        if (method_exists($property, 'isVirtual') && $property->isVirtual()) {
+            continue;
+        }
+
+        try {
+            $fieldSchemas[$property->getName()] = resolve_component_property_field_schema(
+                $property,
+                normalize_editor_value($property->getValue($component)),
+            );
+        } catch (Throwable) {
+            continue;
+        }
+    }
+
+    return $fieldSchemas;
+}
+
 function merge_component_data(array $defaultData, array $existingData): array
 {
     if ($existingData === []) {
@@ -526,6 +938,21 @@ function enrich_component_entry(mixed $component, array $item): mixed
             }
         })()
         : [];
+    $defaultComponentFieldSchemas = is_string($componentClass) && $componentClass !== ''
+        && class_exists($componentClass)
+        && class_exists('\Sendama\Engine\Core\Component')
+        && is_a($componentClass, '\Sendama\Engine\Core\Component', true)
+        && !empty($gameObject = build_dummy_game_object($item))
+        ? (function () use ($componentClass, $gameObject): array {
+            try {
+                $componentInstance = new $componentClass($gameObject);
+
+                return extract_component_editor_field_schemas($componentInstance);
+            } catch (Throwable) {
+                return [];
+            }
+        })()
+        : [];
 
     if (array_key_exists('data', $component)) {
         $existingComponentData = is_array($component['data'])
@@ -546,6 +973,10 @@ function enrich_component_entry(mixed $component, array $item): mixed
             $component['__editorFieldTypes'] = $defaultComponentFieldTypes;
         }
 
+        if ($defaultComponentFieldSchemas !== []) {
+            $component['__editorFieldSchemas'] = $defaultComponentFieldSchemas;
+        }
+
         return $component;
     }
 
@@ -555,6 +986,10 @@ function enrich_component_entry(mixed $component, array $item): mixed
 
     if ($defaultComponentFieldTypes !== []) {
         $component['__editorFieldTypes'] = $defaultComponentFieldTypes;
+    }
+
+    if ($defaultComponentFieldSchemas !== []) {
+        $component['__editorFieldSchemas'] = $defaultComponentFieldSchemas;
     }
 
     return $component;

@@ -731,6 +731,76 @@ test('inspector panel allows generic ui element fields to pick from all scene ui
     expect($inspectionTarget->getValue($panel)['value']['components'][0]['data']['statusUi'] ?? null)->toBe('Score');
 });
 
+test('inspector panel filters physics material pickers to material assets', function () {
+    $workspace = sys_get_temp_dir() . '/sendama-inspector-material-picker-' . uniqid();
+    mkdir($workspace . '/Assets/Materials', 0777, true);
+    file_put_contents($workspace . '/Assets/Materials/perfectly-elastic.material.php', <<<'PHP'
+<?php
+
+return [
+    'type' => 'physics',
+    'name' => 'Perfectly Elastic',
+    'friction' => 0.0,
+    'bounciness' => 1.0,
+];
+PHP);
+    file_put_contents($workspace . '/Assets/Materials/sticky.material.php', <<<'PHP'
+<?php
+
+return [
+    'type' => 'physics',
+    'name' => 'Sticky',
+    'friction' => 1.0,
+    'bounciness' => 0.0,
+];
+PHP);
+
+    $panel = new InspectorPanel(width: 56, height: 24, workingDirectory: $workspace);
+    $materialReferenceOptions = new ReflectionProperty(InspectorPanel::class, 'materialReferenceOptions');
+    $materialReferenceModal = new ReflectionProperty(InspectorPanel::class, 'materialReferenceModal');
+    $materialReferenceOptions->setAccessible(true);
+    $materialReferenceModal->setAccessible(true);
+
+    focusInspectorPanel($panel);
+    $panel->inspectTarget([
+        'context' => 'hierarchy',
+        'name' => 'Ball',
+        'type' => 'GameObject',
+        'path' => 'scene.0',
+        'value' => [
+            'type' => 'Sendama\\Engine\\Core\\GameObject',
+            'name' => 'Ball',
+            'components' => [
+                [
+                    'class' => 'Sendama\\Engine\\Physics\\Rigidbody',
+                    'data' => [
+                        'material' => 'Materials/perfectly-elastic.material.php',
+                    ],
+                    '__editorFieldTypes' => [
+                        'material' => 'Sendama\\Engine\\Physics\\PhysicsMaterial|null',
+                    ],
+                ],
+            ],
+        ],
+    ]);
+
+    expect(implode("\n", $panel->content))->toContain('Material: Perfectly Elastic');
+
+    selectInspectorControlByLabel($panel, 'Material');
+    setInspectorInput('enter');
+    $panel->update();
+
+    /** @var array<string, array{path: string, display: string, name: string}> $options */
+    $options = $materialReferenceOptions->getValue($panel);
+    $modal = $materialReferenceModal->getValue($panel);
+
+    expect($modal->isVisible())->toBeTrue()
+        ->and(array_values(array_map(
+            static fn(array $option): string => $option['name'],
+            $options,
+        )))->toBe(['Perfectly Elastic', 'Sticky']);
+});
+
 test('inspector panel enters edit mode when a control is double clicked', function () {
     $panel = new InspectorPanel(width: 48, height: 24);
     $interactionState = new ReflectionProperty(InspectorPanel::class, 'interactionState');
@@ -1147,6 +1217,91 @@ test('inspector panel allows file assets to rename through the name control', fu
         'path' => '/tmp/project/Assets/Textures/player.texture',
         'relativePath' => 'Textures/player.texture',
         'name' => 'player.texture2',
+    ]);
+});
+
+test('inspector panel exposes editable controls for physics material assets', function () {
+    $panel = new InspectorPanel(width: 48, height: 16);
+
+    $panel->inspectTarget([
+        'context' => 'material_asset',
+        'name' => 'Perfectly Elastic',
+        'type' => 'Physics Material',
+        'asset' => [
+            'name' => 'perfectly-elastic.material.php',
+            'path' => '/tmp/project/Assets/Materials/perfectly-elastic.material.php',
+            'relativePath' => 'Materials/perfectly-elastic.material.php',
+            'isDirectory' => false,
+        ],
+        'value' => [
+            'type' => 'physics',
+            'name' => 'Perfectly Elastic',
+            'friction' => 0.0,
+            'bounciness' => 1.0,
+        ],
+    ]);
+
+    expect($panel->content)->toContain('Type: Physics Material')
+        ->and(implode("\n", $panel->content))->toContain('Friction:')
+        ->toContain('Bounciness:');
+});
+
+test('inspector panel emits material save mutations when material asset properties change', function () {
+    $panel = new InspectorPanel(width: 48, height: 16);
+
+    $panel->inspectTarget([
+        'context' => 'material_asset',
+        'name' => 'Perfectly Elastic',
+        'type' => 'Physics Material',
+        'asset' => [
+            'name' => 'perfectly-elastic.material.php',
+            'path' => '/tmp/project/Assets/Materials/perfectly-elastic.material.php',
+            'relativePath' => 'Materials/perfectly-elastic.material.php',
+            'isDirectory' => false,
+        ],
+        'value' => [
+            'type' => 'physics',
+            'name' => 'Perfectly Elastic',
+            'friction' => 0.0,
+            'bounciness' => 1.0,
+        ],
+    ]);
+
+    $focusableControls = new ReflectionProperty(InspectorPanel::class, 'focusableControls');
+    $focusableControls->setAccessible(true);
+    $applyControlValueToInspectionTarget = new ReflectionMethod(InspectorPanel::class, 'applyControlValueToInspectionTarget');
+    $applyControlValueToInspectionTarget->setAccessible(true);
+
+    $frictionControl = null;
+
+    foreach ($focusableControls->getValue($panel) as $control) {
+        if ($control instanceof InputControl && $control->getLabel() === 'Friction') {
+            $frictionControl = $control;
+            break;
+        }
+    }
+
+    expect($frictionControl)->toBeInstanceOf(InputControl::class);
+
+    $frictionControl->setValue(0.35);
+    $applyControlValueToInspectionTarget->invoke($panel, $frictionControl);
+
+    expect($panel->consumeAssetMutation())->toBe([
+        'operation' => 'save_material',
+        'path' => '/tmp/project/Assets/Materials/perfectly-elastic.material.php',
+        'relativePath' => 'Materials/perfectly-elastic.material.php',
+        'asset' => [
+            'name' => 'perfectly-elastic.material.php',
+            'path' => '/tmp/project/Assets/Materials/perfectly-elastic.material.php',
+            'relativePath' => 'Materials/perfectly-elastic.material.php',
+            'isDirectory' => false,
+        ],
+        'value' => [
+            'type' => 'physics',
+            'name' => 'Perfectly Elastic',
+            'friction' => 0.35,
+            'bounciness' => 1.0,
+        ],
     ]);
 });
 

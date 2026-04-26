@@ -27,6 +27,7 @@ test('editor refreshes inspected hierarchy component fields when watched scripts
 
     expect(implode("\n", $inspectorPanel->content))
         ->toContain('Speed: 1')
+        ->not->toContain('Speed: [')
         ->not->toContain('Lives: 3');
 
     $synchronizeWatchedAssetChanges->invoke($editor, true);
@@ -39,9 +40,11 @@ test('editor refreshes inspected hierarchy component fields when watched scripts
 namespace Sendama\Game\Scripts;
 
 use Sendama\Engine\Core\Component;
+use Sendama\Engine\Core\Attributes\Range;
 
 class WatcherComponent extends Component
 {
+    #[Range(min: 0, max: 10)]
     public int $speed = 1;
     public int $lives = 3;
 }
@@ -52,17 +55,23 @@ PHP
 
     $inspectionTarget = $inspectorPanel->getInspectionTarget();
     $componentData = $loadedScene->hierarchy[0]['components'][0]['data'] ?? [];
+    $componentFieldSchemas = $loadedScene->hierarchy[0]['components'][0]['__editorFieldSchemas'] ?? [];
 
     expect($inspectionTarget)->toMatchArray([
         'context' => 'hierarchy',
         'path' => 'scene.0',
     ]);
     expect(implode("\n", $inspectorPanel->content))
-        ->toContain('Speed: 1')
+        ->toContain('Speed: [')
         ->toContain('Lives: 3');
     expect($componentData)->toMatchArray([
         'speed' => 1,
         'lives' => 3,
+    ]);
+    expect($componentFieldSchemas['speed']['range'] ?? null)->toBe([
+        'min' => 0,
+        'max' => 10,
+        'step' => 1,
     ]);
     expect($loadedScene->isDirty)->toBeTrue();
 });
@@ -100,6 +109,19 @@ namespace Sendama\Engine\Core\Behaviours\Attributes {
     #[\Attribute(\Attribute::TARGET_PROPERTY)]
     class SerializeField
     {
+    }
+}
+
+namespace Sendama\Engine\Core\Attributes {
+    #[\Attribute(\Attribute::TARGET_PROPERTY)]
+    class Range
+    {
+        public function __construct(
+            public int|float $min,
+            public int|float $max,
+            public int|float $step = 1,
+        ) {
+        }
     }
 }
 

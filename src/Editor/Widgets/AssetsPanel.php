@@ -178,7 +178,7 @@ class AssetsPanel extends Widget
     {
         $this->modalState = self::CREATE_MODAL_ASSET_KIND;
         $this->createAssetModal->show(
-            ['Script', 'Scene', 'Prefab', 'Texture', 'Tile Map', 'Event'],
+            ['Script', 'Scene', 'Prefab', 'Material', 'Texture', 'Tile Map', 'Event'],
             title: 'Create Asset',
         );
     }
@@ -757,6 +757,7 @@ class AssetsPanel extends Widget
                 'Script' => 'script',
                 'Scene' => 'scene',
                 'Prefab' => 'prefab',
+                'Material' => 'material',
                 'Texture' => 'texture',
                 'Tile Map' => 'tilemap',
                 'Event' => 'event',

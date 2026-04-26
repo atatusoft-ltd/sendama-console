@@ -716,12 +716,31 @@ namespace Sendama\Engine\Core {
     }
 }
 
+namespace Sendama\Engine\Physics {
+    class PhysicsMaterial
+    {
+        public function __construct(
+            public float $friction = 0.5,
+            public float $bounciness = 0.5,
+            public ?string $name = null,
+            private ?string $assetPath = null,
+        ) {
+        }
+
+        public function getAssetPath(): ?string
+        {
+            return $this->assetPath;
+        }
+    }
+}
+
 namespace Sendama\Game {
     use Sendama\Engine\Core\Behaviours\Attributes\SerializeField;
     use Sendama\Engine\Core\Component;
     use Sendama\Engine\Core\GameObject;
     use Sendama\Engine\Core\Sprite;
     use Sendama\Engine\Core\Texture;
+    use Sendama\Engine\Physics\PhysicsMaterial;
 
     class WeaponConfig extends Component
     {
@@ -730,6 +749,9 @@ namespace Sendama\Game {
 
         #[SerializeField]
         protected ?Sprite $aimSprite = null;
+
+        #[SerializeField]
+        protected ?PhysicsMaterial $impactMaterial = null;
 
         public function __construct(GameObject $gameObject)
         {
@@ -740,6 +762,7 @@ namespace Sendama\Game {
                 ['x' => 1, 'y' => 2, 'width' => 3, 'height' => 4],
                 ['x' => 0, 'y' => 1],
             );
+            $this->impactMaterial = new PhysicsMaterial(0.0, 1.0, 'Perfectly Elastic', 'Materials/perfectly-elastic.material.php');
         }
     }
 }
@@ -795,10 +818,23 @@ PHP
                         'y' => 1,
                     ],
                 ],
+                'impactMaterial' => 'Materials/perfectly-elastic.material.php',
             ],
             '__editorFieldTypes' => [
                 'bulletTexture' => 'Sendama\\Engine\\Core\\Texture|null',
                 'aimSprite' => 'Sendama\\Engine\\Core\\Sprite|null',
+                'impactMaterial' => 'Sendama\\Engine\\Physics\\PhysicsMaterial|null',
+            ],
+            '__editorFieldSchemas' => [
+                'bulletTexture' => [
+                    'type' => 'Sendama\\Engine\\Core\\Texture|null',
+                ],
+                'aimSprite' => [
+                    'type' => 'Sendama\\Engine\\Core\\Sprite|null',
+                ],
+                'impactMaterial' => [
+                    'type' => 'Sendama\\Engine\\Physics\\PhysicsMaterial|null',
+                ],
             ],
         ],
         ]);

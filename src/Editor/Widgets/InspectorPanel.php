@@ -22,6 +22,7 @@ use Sendama\Console\Util\Path;
 use Sendama\Console\Editor\Widgets\Controls\CompoundInputControl;
 use Sendama\Console\Editor\Widgets\Controls\InputControl;
 use Sendama\Console\Editor\Widgets\Controls\InputControlFactory;
+use Sendama\Console\Editor\Widgets\Controls\MaterialReferenceInputControl;
 use Sendama\Console\Editor\Widgets\Controls\NumberInputControl;
 use Sendama\Console\Editor\Widgets\Controls\PathInputControl;
 use Sendama\Console\Editor\Widgets\Controls\PrefabReferenceInputControl;
@@ -42,6 +43,7 @@ class InspectorPanel extends Widget
     private const string STATE_PATH_INPUT_ACTION_SELECTION = 'path_input_action_selection';
     private const string STATE_PATH_INPUT_FILE_DIALOG = 'path_input_file_dialog';
     private const string STATE_PREFAB_REFERENCE_SELECTION = 'prefab_reference_selection';
+    private const string STATE_MATERIAL_REFERENCE_SELECTION = 'material_reference_selection';
     private const string STATE_UI_ELEMENT_REFERENCE_SELECTION = 'ui_element_reference_selection';
     private const string SECTION_HEADER_SEQUENCE = EditorColorScheme::SURFACE_SEQUENCE;
     private const string SECTION_HEADER_SELECTED_SEQUENCE = EditorColorScheme::SELECTED_ROW_SEQUENCE;
@@ -74,9 +76,11 @@ class InspectorPanel extends Widget
     protected OptionListModal $addComponentModal;
     protected OptionListModal $deleteComponentModal;
     protected OptionListModal $prefabReferenceModal;
+    protected OptionListModal $materialReferenceModal;
     protected OptionListModal $uiElementReferenceModal;
     protected ?PathInputControl $activePathInputControl = null;
     protected ?PrefabReferenceInputControl $activePrefabReferenceControl = null;
+    protected ?MaterialReferenceInputControl $activeMaterialReferenceControl = null;
     protected ?UIElementReferenceInputControl $activeUIElementReferenceControl = null;
     protected array $controlBindings = [];
     protected array $controlMetadata = [];
@@ -90,6 +94,7 @@ class InspectorPanel extends Widget
     protected bool $isComponentMoveModeActive = false;
     protected ?int $pendingComponentDeletionIndex = null;
     protected array $prefabReferenceOptions = [];
+    protected array $materialReferenceOptions = [];
     protected array $uiElementReferenceOptions = [];
     protected string $modeHelpLabel = '';
     protected bool $shouldRefreshModalBackground = false;
@@ -97,6 +102,7 @@ class InspectorPanel extends Widget
     protected float $lastClickedControlAt = 0.0;
     protected array $classImportAliasCache = [];
     private const string GUI_TEXTURE_TYPE = 'Sendama\\Engine\\UI\\GUITexture\\GUITexture';
+    private const string PHYSICS_MATERIAL_TYPE = 'Sendama\\Engine\\Physics\\PhysicsMaterial';
     private const string UI_ELEMENT_TYPE = 'Sendama\\Engine\\UI\\UIElement';
     private const string UI_ELEMENT_INTERFACE_TYPE = 'Sendama\\Engine\\UI\\Interfaces\\UIElementInterface';
     private const array GUI_TEXTURE_COLOR_OPTIONS = [
@@ -132,6 +138,7 @@ class InspectorPanel extends Widget
         $this->addComponentModal = new OptionListModal(title: 'Add Component');
         $this->deleteComponentModal = new OptionListModal(title: 'Remove Component');
         $this->prefabReferenceModal = new OptionListModal(title: 'Choose Prefab');
+        $this->materialReferenceModal = new OptionListModal(title: 'Choose Physics Material');
         $this->uiElementReferenceModal = new OptionListModal(title: 'Choose UI Element');
         $this->projectDirectory = is_string($workingDirectory) && $workingDirectory !== ''
             ? $workingDirectory
@@ -220,6 +227,8 @@ class InspectorPanel extends Widget
 
         if ($context === 'prefab' && is_array($value)) {
             $this->buildPrefabControls($target, $value);
+        } elseif ($context === 'material_asset' && is_array($value)) {
+            $this->buildMaterialAssetControls($target, $value);
         } elseif ($context === 'hierarchy' && is_array($value)) {
             $this->buildHierarchyControls($target, $value);
         } elseif ($context === 'scene' && is_array($value)) {
@@ -276,6 +285,7 @@ class InspectorPanel extends Widget
             || $this->addComponentModal->isVisible()
             || $this->deleteComponentModal->isVisible()
             || $this->prefabReferenceModal->isVisible()
+            || $this->materialReferenceModal->isVisible()
             || $this->uiElementReferenceModal->isVisible();
     }
 
@@ -286,6 +296,7 @@ class InspectorPanel extends Widget
             || $this->addComponentModal->isDirty()
             || $this->deleteComponentModal->isDirty()
             || $this->prefabReferenceModal->isDirty()
+            || $this->materialReferenceModal->isDirty()
             || $this->uiElementReferenceModal->isDirty();
     }
 
@@ -296,6 +307,7 @@ class InspectorPanel extends Widget
         $this->addComponentModal->markClean();
         $this->deleteComponentModal->markClean();
         $this->prefabReferenceModal->markClean();
+        $this->materialReferenceModal->markClean();
         $this->uiElementReferenceModal->markClean();
     }
 
@@ -306,6 +318,7 @@ class InspectorPanel extends Widget
         $this->addComponentModal->syncLayout($terminalWidth, $terminalHeight);
         $this->deleteComponentModal->syncLayout($terminalWidth, $terminalHeight);
         $this->prefabReferenceModal->syncLayout($terminalWidth, $terminalHeight);
+        $this->materialReferenceModal->syncLayout($terminalWidth, $terminalHeight);
         $this->uiElementReferenceModal->syncLayout($terminalWidth, $terminalHeight);
     }
 
@@ -329,6 +342,10 @@ class InspectorPanel extends Widget
 
         if ($this->prefabReferenceModal->isVisible()) {
             $this->prefabReferenceModal->render();
+        }
+
+        if ($this->materialReferenceModal->isVisible()) {
+            $this->materialReferenceModal->render();
         }
 
         if ($this->uiElementReferenceModal->isVisible()) {
@@ -393,6 +410,26 @@ class InspectorPanel extends Widget
 
             if (is_string($selection) && $selection !== '') {
                 $this->applyPrefabReferenceSelection($selection);
+            }
+
+            return $isWithinModal;
+        }
+
+        if ($this->materialReferenceModal->isVisible()) {
+            if ($this->materialReferenceModal->handleScrollbarMouseEvent($mouseEvent)) {
+                return true;
+            }
+
+            $isWithinModal = $this->materialReferenceModal->containsPoint($mouseEvent->x, $mouseEvent->y);
+
+            if ($mouseEvent->buttonIndex !== 0 || $mouseEvent->action !== 'Pressed') {
+                return $isWithinModal;
+            }
+
+            $selection = $this->materialReferenceModal->clickOptionAtPoint($mouseEvent->x, $mouseEvent->y);
+
+            if (is_string($selection) && $selection !== '') {
+                $this->applyMaterialReferenceSelection($selection);
             }
 
             return $isWithinModal;
@@ -553,7 +590,7 @@ class InspectorPanel extends Widget
     {
         if (
             !is_array($this->inspectionTarget)
-            || ($this->inspectionTarget['context'] ?? null) !== 'asset'
+            || !in_array($this->inspectionTarget['context'] ?? null, ['asset', 'material_asset'], true)
         ) {
             return;
         }
@@ -561,7 +598,9 @@ class InspectorPanel extends Widget
         $selectedControlSnapshot = $this->captureSelectedControlSnapshot($this->getSelectedControl());
         $target = $this->inspectionTarget;
         $target['name'] = $value['name'] ?? ($target['name'] ?? 'Unnamed Asset');
-        $target['type'] = ($value['isDirectory'] ?? false) ? 'Folder' : 'File';
+        $target['type'] = ($this->inspectionTarget['context'] ?? null) === 'material_asset'
+            ? 'Physics Material'
+            : (($value['isDirectory'] ?? false) ? 'Folder' : 'File');
         $target['value'] = $value;
 
         $this->inspectTarget($target);
@@ -616,6 +655,11 @@ class InspectorPanel extends Widget
 
         if ($this->prefabReferenceModal->isVisible()) {
             $this->handlePrefabReferenceModalInput();
+            return;
+        }
+
+        if ($this->materialReferenceModal->isVisible()) {
+            $this->handleMaterialReferenceModalInput();
             return;
         }
 
@@ -923,6 +967,29 @@ class InspectorPanel extends Widget
         $this->addControl(new TextInputControl('Path', $assetPath, 0, true));
     }
 
+    private function buildMaterialAssetControls(array $target, array $material): void
+    {
+        $asset = is_array($target['asset'] ?? null) ? $target['asset'] : [];
+        $assetName = is_string($asset['name'] ?? null) ? $asset['name'] : basename((string) ($asset['path'] ?? 'material.material.php'));
+        $assetPath = is_string($asset['path'] ?? null) ? $asset['path'] : '';
+
+        $this->addControl(new TextInputControl('Type', 'Physics Material', 0, true));
+        $this->addControl(new TextInputControl('File', $assetName, 0, true));
+        $this->addControl(new TextInputControl('Path', $assetPath, 0, true));
+        $this->addBoundControl(
+            new TextInputControl('Name', (string) ($material['name'] ?? $target['name'] ?? 'Material'), 0),
+            ['name'],
+        );
+        $this->addBoundControl(
+            new SliderInputControl('Friction', (float) ($material['friction'] ?? 0.5), 0, 1, 0.05, 0),
+            ['friction'],
+        );
+        $this->addBoundControl(
+            new SliderInputControl('Bounciness', (float) ($material['bounciness'] ?? 0.5), 0, 1, 0.05, 0),
+            ['bounciness'],
+        );
+    }
+
     private function addRendererControls(array $item): void
     {
         $sprite = is_array($item['sprite'] ?? null) ? $item['sprite'] : [];
@@ -1009,11 +1076,13 @@ class InspectorPanel extends Widget
             $componentFieldTypes = is_array($component['__editorFieldTypes'] ?? null)
                 ? $component['__editorFieldTypes']
                 : [];
-            $componentFieldSchemas = $this->resolveComponentFieldSchemas(
-                is_string($component['class'] ?? null) ? $component['class'] : null,
-                $componentFieldTypes,
-                $serializedComponentData ?? [],
-            );
+            $componentFieldSchemas = is_array($component['__editorFieldSchemas'] ?? null)
+                ? $component['__editorFieldSchemas']
+                : $this->resolveComponentFieldSchemas(
+                    is_string($component['class'] ?? null) ? $component['class'] : null,
+                    $componentFieldTypes,
+                    $serializedComponentData ?? [],
+                );
 
             if (is_array($serializedComponentData)) {
                 $this->addControl(
@@ -1061,6 +1130,13 @@ class InspectorPanel extends Widget
                 $componentFieldSchemas,
             );
         }
+    }
+
+    public function invalidateProjectScriptMetadataCaches(): void
+    {
+        $this->cachedProjectComponentCandidates = null;
+        $this->classImportAliasCache = [];
+        $this->componentMenuDefinitions = [];
     }
 
     private function addComponentPropertyControls(
@@ -1130,6 +1206,15 @@ class InspectorPanel extends Widget
                 $label,
                 $value,
                 $this->resolvePrefabDisplayLabelsByPath(),
+                $indentLevel,
+            );
+        }
+
+        if ($this->isPhysicsMaterialAssignableField($fieldType)) {
+            return new MaterialReferenceInputControl(
+                $label,
+                $this->normalizePhysicsMaterialComponentFieldValue($value),
+                $this->resolvePhysicsMaterialDisplayLabelsByPath(),
                 $indentLevel,
             );
         }
@@ -1225,6 +1310,20 @@ class InspectorPanel extends Widget
         );
 
         return in_array('Sendama\\Engine\\Core\\Texture', $normalizedTypes, true);
+    }
+
+    private function isPhysicsMaterialAssignableField(?string $fieldType): bool
+    {
+        if (!is_string($fieldType) || trim($fieldType) === '') {
+            return false;
+        }
+
+        $normalizedTypes = array_map(
+            static fn(string $type): string => ltrim(trim($type), '\\'),
+            explode('|', $fieldType),
+        );
+
+        return in_array(self::PHYSICS_MATERIAL_TYPE, $normalizedTypes, true);
     }
 
     private function shouldRenderNestedComponentProperties(mixed $value, array $fieldSchema = []): bool
@@ -1514,6 +1613,7 @@ class InspectorPanel extends Widget
             'Sendama\\Engine\\Core\\Rect',
             'Sendama\\Engine\\Core\\Texture',
             'Sendama\\Engine\\Core\\Sprite',
+            self::PHYSICS_MATERIAL_TYPE,
         ], true)) {
             return false;
         }
@@ -1887,6 +1987,12 @@ class InspectorPanel extends Widget
             return;
         }
 
+        if ($this->materialReferenceModal->isVisible()) {
+            $this->help = 'Up/Down choose  Enter assign  Esc cancel';
+            $this->modeHelpLabel = 'Mode: Material Picker';
+            return;
+        }
+
         if ($this->uiElementReferenceModal->isVisible()) {
             $this->help = 'Up/Down choose  Enter assign  Esc cancel';
             $this->modeHelpLabel = 'Mode: UI Element Picker';
@@ -1908,6 +2014,12 @@ class InspectorPanel extends Widget
         if ($this->interactionState === self::STATE_UI_ELEMENT_REFERENCE_SELECTION) {
             $this->help = 'Up/Down choose  Enter assign  Esc cancel';
             $this->modeHelpLabel = 'Mode: UI Element Assign';
+            return;
+        }
+
+        if ($this->interactionState === self::STATE_MATERIAL_REFERENCE_SELECTION) {
+            $this->help = 'Up/Down choose  Enter assign  Esc cancel';
+            $this->modeHelpLabel = 'Mode: Material Assign';
             return;
         }
 
@@ -1975,6 +2087,12 @@ class InspectorPanel extends Widget
 
         if ($selectedControl instanceof PrefabReferenceInputControl) {
             $this->help = 'Up/Down select  Enter choose prefab  Tab next';
+            $this->modeHelpLabel = 'Mode: Control Select';
+            return;
+        }
+
+        if ($selectedControl instanceof MaterialReferenceInputControl) {
+            $this->help = 'Up/Down select  Enter choose material  Tab next';
             $this->modeHelpLabel = 'Mode: Control Select';
             return;
         }
@@ -2190,6 +2308,11 @@ class InspectorPanel extends Widget
             return;
         }
 
+        if ($selectedControl instanceof MaterialReferenceInputControl) {
+            $this->showMaterialReferenceModal($selectedControl);
+            return;
+        }
+
         if ($selectedControl instanceof UIElementReferenceInputControl) {
             $this->showUIElementReferenceModal($selectedControl);
             return;
@@ -2334,6 +2457,7 @@ class InspectorPanel extends Widget
         $this->closeAddComponentModal();
         $this->closeDeleteComponentModal();
         $this->closePrefabReferenceModal();
+        $this->closeMaterialReferenceModal();
         $this->closeUIElementReferenceModal();
         $selectedControl = $this->getSelectedControl();
 
@@ -2518,6 +2642,36 @@ class InspectorPanel extends Widget
         $this->syncModalLayout($terminalWidth, $terminalHeight);
     }
 
+    private function showMaterialReferenceModal(MaterialReferenceInputControl $control): void
+    {
+        $this->activeMaterialReferenceControl = $control;
+        $this->materialReferenceOptions = $this->resolveAvailablePhysicsMaterialOptions();
+        $options = ['Default', ...array_keys($this->materialReferenceOptions), 'Cancel'];
+        $selectedIndex = 0;
+        $currentValue = $control->getValue();
+
+        if (is_string($currentValue) && $currentValue !== '') {
+            foreach ($this->materialReferenceOptions as $label => $definition) {
+                if (($definition['path'] ?? null) === $currentValue) {
+                    $optionIndex = array_search($label, $options, true);
+
+                    if (is_int($optionIndex)) {
+                        $selectedIndex = $optionIndex;
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        $this->materialReferenceModal->show($options, $selectedIndex, 'Choose Physics Material');
+        $this->interactionState = self::STATE_MATERIAL_REFERENCE_SELECTION;
+        $terminalSize = get_max_terminal_size();
+        $terminalWidth = $terminalSize['width'] ?? DEFAULT_TERMINAL_WIDTH;
+        $terminalHeight = $terminalSize['height'] ?? DEFAULT_TERMINAL_HEIGHT;
+        $this->syncModalLayout($terminalWidth, $terminalHeight);
+    }
+
     private function showUIElementReferenceModal(UIElementReferenceInputControl $control): void
     {
         $this->activeUIElementReferenceControl = $control;
@@ -2579,6 +2733,32 @@ class InspectorPanel extends Widget
         $this->applyPrefabReferenceSelection($this->prefabReferenceModal->getSelectedOption());
     }
 
+    private function handleMaterialReferenceModalInput(): void
+    {
+        if (Input::isKeyDown(KeyCode::ESCAPE)) {
+            $this->closeMaterialReferenceModal();
+            $this->interactionState = self::STATE_CONTROL_SELECTION;
+            $this->refreshContent();
+            return;
+        }
+
+        if (Input::isKeyDown(KeyCode::UP)) {
+            $this->materialReferenceModal->moveSelection(-1);
+            return;
+        }
+
+        if (Input::isKeyDown(KeyCode::DOWN)) {
+            $this->materialReferenceModal->moveSelection(1);
+            return;
+        }
+
+        if (!Input::isKeyDown(KeyCode::ENTER)) {
+            return;
+        }
+
+        $this->applyMaterialReferenceSelection($this->materialReferenceModal->getSelectedOption());
+    }
+
     private function handleUIElementReferenceModalInput(): void
     {
         if (Input::isKeyDown(KeyCode::ESCAPE)) {
@@ -2610,6 +2790,13 @@ class InspectorPanel extends Widget
         $this->prefabReferenceModal->hide();
         $this->activePrefabReferenceControl = null;
         $this->prefabReferenceOptions = [];
+    }
+
+    private function closeMaterialReferenceModal(): void
+    {
+        $this->materialReferenceModal->hide();
+        $this->activeMaterialReferenceControl = null;
+        $this->materialReferenceOptions = [];
     }
 
     private function closeUIElementReferenceModal(): void
@@ -2717,6 +2904,33 @@ class InspectorPanel extends Widget
         $this->activePrefabReferenceControl->setValue($nextValue);
         $this->applyControlValueToInspectionTarget($this->activePrefabReferenceControl);
         $this->closePrefabReferenceModal();
+        $this->interactionState = self::STATE_CONTROL_SELECTION;
+        $this->refreshContent();
+    }
+
+    private function applyMaterialReferenceSelection(?string $selection): void
+    {
+        if (!$this->activeMaterialReferenceControl instanceof MaterialReferenceInputControl) {
+            $this->closeMaterialReferenceModal();
+            $this->interactionState = self::STATE_CONTROL_SELECTION;
+            $this->refreshContent();
+            return;
+        }
+
+        if ($selection === 'Cancel') {
+            $this->closeMaterialReferenceModal();
+            $this->interactionState = self::STATE_CONTROL_SELECTION;
+            $this->refreshContent();
+            return;
+        }
+
+        $nextValue = $selection === 'Default'
+            ? null
+            : ($this->materialReferenceOptions[$selection]['path'] ?? null);
+
+        $this->activeMaterialReferenceControl->setValue($nextValue);
+        $this->applyControlValueToInspectionTarget($this->activeMaterialReferenceControl);
+        $this->closeMaterialReferenceModal();
         $this->interactionState = self::STATE_CONTROL_SELECTION;
         $this->refreshContent();
     }
@@ -3212,6 +3426,31 @@ function normalize_editor_value(mixed $value): mixed
                 ? $normalizedTexture['path']
                 : $normalizedTexture;
         }
+    }
+
+    if (is_a($value, '\Sendama\Engine\Physics\PhysicsMaterial')) {
+        $assetPath = method_exists($value, 'getAssetPath')
+            ? $value->getAssetPath()
+            : ($value->assetPath ?? $value->path ?? null);
+        $assetPath = is_string($assetPath) ? trim(str_replace('\\', '/', $assetPath)) : '';
+
+        if ($assetPath !== '') {
+            return $assetPath;
+        }
+
+        $normalizedMaterial = [
+            'friction' => (float)($value->friction ?? 0.5),
+            'bounciness' => (float)($value->bounciness ?? 0.5),
+        ];
+        $name = method_exists($value, 'getName')
+            ? $value->getName()
+            : ($value->name ?? null);
+
+        if (is_string($name) && trim($name) !== '') {
+            $normalizedMaterial['name'] = trim($name);
+        }
+
+        return $normalizedMaterial;
     }
 
     if (
@@ -3710,6 +3949,31 @@ PHP;
             }
         }
 
+        if (is_a($value, '\Sendama\Engine\Physics\PhysicsMaterial')) {
+            $assetPath = method_exists($value, 'getAssetPath')
+                ? $value->getAssetPath()
+                : ($value->assetPath ?? $value->path ?? null);
+            $assetPath = is_string($assetPath) ? trim(str_replace('\\', '/', $assetPath)) : '';
+
+            if ($assetPath !== '') {
+                return $assetPath;
+            }
+
+            $normalizedMaterial = [
+                'friction' => (float)($value->friction ?? 0.5),
+                'bounciness' => (float)($value->bounciness ?? 0.5),
+            ];
+            $name = method_exists($value, 'getName')
+                ? $value->getName()
+                : ($value->name ?? null);
+
+            if (is_string($name) && trim($name) !== '') {
+                $normalizedMaterial['name'] = trim($name);
+            }
+
+            return $normalizedMaterial;
+        }
+
         if (
             (is_a($value, '\Sendama\Engine\Core\Rect')
                 || (method_exists($value, 'getWidth') && method_exists($value, 'getHeight')))
@@ -3828,6 +4092,35 @@ PHP;
         }
 
         return 'None';
+    }
+
+    private function normalizePhysicsMaterialComponentFieldValue(mixed $value): ?string
+    {
+        if (is_string($value)) {
+            $normalizedValue = trim(str_replace('\\', '/', $value));
+
+            return $normalizedValue !== '' ? $normalizedValue : null;
+        }
+
+        if (is_array($value)) {
+            $path = $value['path'] ?? null;
+
+            return is_string($path) && trim($path) !== ''
+                ? trim(str_replace('\\', '/', $path))
+                : null;
+        }
+
+        if (is_object($value)) {
+            $path = method_exists($value, 'getAssetPath')
+                ? $value->getAssetPath()
+                : ($value->path ?? null);
+
+            return is_string($path) && trim($path) !== ''
+                ? trim(str_replace('\\', '/', $path))
+                : null;
+        }
+
+        return null;
     }
 
     private function buildUniqueComponentMenuLabel(string $baseLabel, string $componentClass, array &$usedLabels): string
@@ -4475,6 +4768,22 @@ PHP;
         return $displayLabelsByPath;
     }
 
+    private function resolvePhysicsMaterialDisplayLabelsByPath(): array
+    {
+        $displayLabelsByPath = [];
+
+        foreach ($this->resolveAvailablePhysicsMaterialOptions() as $materialOption) {
+            $path = $materialOption['path'] ?? null;
+            $label = $materialOption['display'] ?? null;
+
+            if (is_string($path) && $path !== '' && is_string($label) && $label !== '') {
+                $displayLabelsByPath[$path] = $label;
+            }
+        }
+
+        return $displayLabelsByPath;
+    }
+
     private function resolveAvailablePrefabOptions(): array
     {
         $prefabsDirectory = Path::join($this->resolveAssetsWorkingDirectory(), 'Prefabs');
@@ -4528,6 +4837,73 @@ PHP;
         ksort($prefabOptions);
 
         return $prefabOptions;
+    }
+
+    private function resolveAvailablePhysicsMaterialOptions(): array
+    {
+        $materialsDirectory = Path::join($this->resolveAssetsWorkingDirectory(), 'Materials');
+
+        if (!is_dir($materialsDirectory)) {
+            return [];
+        }
+
+        $materialOptions = [];
+        $usedLabels = [];
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($materialsDirectory, RecursiveDirectoryIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $file) {
+            if (!$file->isFile()) {
+                continue;
+            }
+
+            $fileName = $file->getFilename();
+
+            if (!is_string($fileName) || !str_ends_with(strtolower($fileName), '.material.php')) {
+                continue;
+            }
+
+            $absolutePath = $file->getPathname();
+            $relativePath = $this->buildRelativeAssetPath($absolutePath);
+
+            if ($relativePath === null) {
+                continue;
+            }
+
+            $materialMetadata = null;
+
+            try {
+                $materialMetadata = require $absolutePath;
+            } catch (Throwable) {
+                $materialMetadata = null;
+            }
+
+            $materialType = is_array($materialMetadata)
+                ? ($materialMetadata['type'] ?? 'physics')
+                : (is_object($materialMetadata) ? ($materialMetadata->type ?? 'physics') : 'physics');
+
+            if (!is_string($materialType) || strtolower(trim($materialType)) !== 'physics') {
+                continue;
+            }
+
+            $displayName = is_array($materialMetadata) && is_string($materialMetadata['name'] ?? null) && trim($materialMetadata['name']) !== ''
+                ? trim($materialMetadata['name'])
+                : (is_object($materialMetadata) && is_string($materialMetadata->name ?? null) && trim($materialMetadata->name) !== ''
+                    ? trim($materialMetadata->name)
+                    : basename($relativePath, '.material.php'));
+            $label = $this->buildUniqueReferenceOptionLabel($displayName, $usedLabels);
+
+            $materialOptions[$label] = [
+                'path' => $relativePath,
+                'display' => $label,
+                'name' => $displayName,
+            ];
+        }
+
+        ksort($materialOptions);
+
+        return $materialOptions;
     }
 
     private function resolveUIElementDisplayLabelsByName(?string $fieldType = null): array
@@ -4746,7 +5122,7 @@ PHP;
         return $segments[array_key_last($segments)] ?? $normalizedType;
     }
 
-    private function buildRelativePrefabPath(string $absolutePath): ?string
+    private function buildRelativeAssetPath(string $absolutePath): ?string
     {
         $assetsDirectory = $this->resolveAssetsWorkingDirectory();
         $normalizedAssetsDirectory = rtrim(str_replace('\\', '/', $assetsDirectory), '/');
@@ -4757,6 +5133,11 @@ PHP;
         }
 
         return substr($normalizedAbsolutePath, strlen($normalizedAssetsDirectory) + 1) ?: null;
+    }
+
+    private function buildRelativePrefabPath(string $absolutePath): ?string
+    {
+        return $this->buildRelativeAssetPath($absolutePath);
     }
 
     private function buildUniquePrefabOptionLabel(string $displayName, string $fileName, array &$usedLabels): string
@@ -4911,6 +5292,20 @@ PHP;
 
         if ($valuePath === ['name']) {
             $this->inspectionTarget['name'] = (string) $control->getValue();
+        }
+
+        if ($context === 'material_asset') {
+            if (is_array($this->inspectionTarget['asset'] ?? null)) {
+                $this->pendingAssetMutation = [
+                    'operation' => 'save_material',
+                    'path' => $this->inspectionTarget['asset']['path'] ?? null,
+                    'relativePath' => $this->inspectionTarget['asset']['relativePath'] ?? null,
+                    'asset' => $this->inspectionTarget['asset'],
+                    'value' => $inspectionValue,
+                ];
+            }
+
+            return;
         }
 
         if ($context === 'asset') {

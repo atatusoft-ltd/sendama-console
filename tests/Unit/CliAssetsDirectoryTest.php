@@ -2,6 +2,7 @@
 
 use Sendama\Console\Commands\GenerateScene;
 use Sendama\Console\Commands\GeneratePrefab;
+use Sendama\Console\Commands\GenerateMaterial;
 use Sendama\Console\Commands\GenerateScript;
 use Sendama\Console\Commands\GenerateTexture;
 use Sendama\Console\Commands\NewGame;
@@ -115,6 +116,21 @@ test('new game creates an Assets directory', function () {
     expect(is_dir($workspace . '/Assets'))->toBeTrue();
 });
 
+test('new game creates a Materials directory inside Assets', function () {
+    $workspace = sys_get_temp_dir() . '/sendama-new-game-materials-' . uniqid();
+    mkdir($workspace, 0777, true);
+    mkdir($workspace . '/Assets', 0777, true);
+
+    $command = new NewGame();
+    $property = new ReflectionProperty(NewGame::class, 'targetDirectory');
+    $property->setValue($command, $workspace);
+
+    $method = new ReflectionMethod(NewGame::class, 'createAssetsMaterialsDirectory');
+    $method->invoke($command, $workspace . '/Assets');
+
+    expect(is_dir($workspace . '/Assets/Materials'))->toBeTrue();
+});
+
 test('asset root resolution prefers populated legacy assets over empty canonical Assets', function () {
     $workspace = sys_get_temp_dir() . '/sendama-assets-root-resolution-' . uniqid();
     mkdir($workspace . '/Assets/Prefabs', 0777, true);
@@ -202,6 +218,23 @@ test('generate texture creates files under Assets', function () {
 
     expect($exitCode)->toBe(0)
         ->and(is_file($workspace . '/Assets/Textures/player.texture'))->toBeTrue();
+});
+
+test('generate material creates files under Assets', function () {
+    $workspace = createCliAssetsWorkspace();
+    $exitCode = runGeneratorCommandInWorkspace(
+        new GenerateMaterial(),
+        $workspace,
+        ['name' => 'perfectly-elastic'],
+    );
+
+    $materialPath = $workspace . '/Assets/Materials/perfectly-elastic.material.php';
+    $materialContents = file_get_contents($materialPath);
+
+    expect($exitCode)->toBe(0)
+        ->and(is_file($materialPath))->toBeTrue()
+        ->and($materialContents)->toContain("'type' => 'physics'")
+        ->and($materialContents)->toContain("'name' => 'Perfectly Elastic'");
 });
 
 test('generate scene creates files under Assets', function () {
